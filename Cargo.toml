@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 aery = "0.4"
 bevy = "0.11.3"
+bimap = "0.6.3"
