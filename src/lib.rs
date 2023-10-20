@@ -13,7 +13,8 @@ use bevy::{
     prelude::*,
 };
 use tiles::{
-    calculate_cell_index, calculate_chunk_coordinate, CellMap, CellMapLabel, Chunk, InMap, MapLabel,
+    calculate_cell_index, calculate_chunk_coordinate, CellChunk, CellIndex, CellMap, CellMapLabel,
+    Chunk, InMap, MapLabel,
 };
 
 use crate::tiles::InChunk;
@@ -87,7 +88,7 @@ where
         }
 
         // Get the map or return
-        let mut map_e = if let Some(map) = world
+        let map_e = if let Some(map) = world
             .query_filtered::<Entity, With<MapLabel<L>>>()
             .get_single_mut(world)
             .ok()
@@ -104,7 +105,7 @@ where
             .get::<CellMap>()
             .unwrap()
             .chunks
-            .get_by_left(&old_chunk_c)
+            .get(&old_chunk_c)
             .copied()
             .and_then(|chunk_e| {
                 map_e
@@ -120,7 +121,9 @@ where
         // Remove the old entity or return if the old entity is already deleted
         let mut old_chunk = old_chunk_e.get_mut::<Chunk>().unwrap();
         let old_cell_i = calculate_cell_index(self.old_c, L::CHUNK_SIZE);
-        let old_cell_id = if let Some((_, cell_id)) = old_chunk.cells.remove_by_left(&old_cell_i) {
+        let old_cell_id = if let Some(Some(cell_id)) =
+            old_chunk.cells.get_mut(old_cell_i).map(|cell| cell.take())
+        {
             cell_id
         } else {
             return;
@@ -191,7 +194,7 @@ where
             .get::<CellMap>()
             .unwrap()
             .chunks
-            .get_by_left(&chunk_c)
+            .get(&chunk_c)
             .copied()
             .and_then(|chunk_e| {
                 map_e
@@ -226,17 +229,17 @@ where
         let chunk_id = chunk_e.id();
         let mut chunk = chunk_e.get_mut::<Chunk>().unwrap();
 
-        let out_of_chunk = chunk.cells.insert(cell_i, self.cell_e);
-
-        match out_of_chunk {
-            bimap::Overwritten::Neither => {}
-            // We replaced an old index
-            bimap::Overwritten::Left(_, cell_id) => {
-                world.despawn(cell_id);
+        if let Some(cell) = chunk.cells.get_mut(cell_i) {
+            if let Some(old_cell_id) = cell.replace(self.cell_e) {
+                world.despawn(old_cell_id);
             }
-            _ => panic!("The same entity found in the map twice"),
-        };
+        }
 
         Set::<InChunk<L>>::new(self.cell_e, chunk_id).apply(world);
+
+        world
+            .get_entity_mut(self.cell_e)
+            .unwrap()
+            .insert((CellIndex::<L>::new(cell_i), CellChunk::<L>::new(chunk_c.0)));
     }
 }

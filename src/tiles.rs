@@ -12,23 +12,57 @@ use bevy::{
 };
 use bimap::BiHashMap;
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 
 #[derive(Component)]
-pub(crate) struct CellIndex(isize);
+pub struct CellIndex<L>(usize, PhantomData<L>);
+
+impl<L> CellIndex<L> {
+    pub(crate) fn new(index: usize) -> Self {
+        Self(index, PhantomData)
+    }
+}
+
+#[derive(Component)]
+pub struct CellChunk<L>([isize; 2], PhantomData<L>);
+
+impl<L> CellChunk<L> {
+    pub(crate) fn new(coord: [isize; 2]) -> Self {
+        Self(coord, PhantomData)
+    }
+}
+
+#[derive(WorldQuery)]
+pub struct CellCoord<L>
+where
+    L: CellMapLabel + 'static,
+{
+    index: &'static CellIndex<L>,
+    chunk: &'static CellChunk<L>,
+}
+
+impl<L> From<CellCoordItem<'_, L>> for [isize; 2]
+where
+    L: CellMapLabel,
+{
+    fn from(value: CellCoordItem<'_, L>) -> Self {
+        calculate_cell_coordinate(value.chunk.0, value.index.0, L::CHUNK_SIZE)
+    }
+}
 
 #[derive(Relation)]
 #[aery(Recursive)]
-pub(crate) struct InChunk<L>(std::marker::PhantomData<L>);
+pub struct InChunk<L>(std::marker::PhantomData<L>);
 
 #[derive(Component)]
 pub struct Chunk {
-    pub(crate) cells: BiHashMap<usize, Entity>,
+    pub(crate) cells: Vec<Option<Entity>>,
 }
 
 impl Chunk {
     pub(crate) fn new(chunk_size: usize) -> Self {
         Self {
-            cells: BiHashMap::with_capacity(chunk_size),
+            cells: vec![None; chunk_size],
         }
     }
 }
@@ -39,7 +73,7 @@ pub(crate) struct InMap<L>(std::marker::PhantomData<L>);
 
 #[derive(Component, Default)]
 pub struct CellMap {
-    pub(crate) chunks: BiHashMap<ChunkCoord<2>, Entity>,
+    pub(crate) chunks: HashMap<ChunkCoord<2>, Entity>,
 }
 
 /// Used to query individual cells from a cell map.
@@ -52,13 +86,13 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    cell_q: Query<'w, 's, (Q, Relations<InChunk<L>>, Entity), F>,
-    chunk_q: Query<'w, 's, (&'static Chunk, Relations<InMap<L>>)>,
+    cell_q: Query<'w, 's, Q, (F, Relations<InChunk<L>>)>,
+    chunk_q: Query<'w, 's, &'static Chunk, Relations<InMap<L>>>,
     map_q: Query<'w, 's, &'static CellMap, With<MapLabel<L>>>,
 }
 
 #[derive(PartialEq, Eq, Hash)]
-pub(crate) struct ChunkCoord<const N: usize>([isize; N]);
+pub(crate) struct ChunkCoord<const N: usize>(pub(crate) [isize; N]);
 
 impl<const N: usize> From<[isize; N]> for ChunkCoord<N> {
     fn from(value: [isize; N]) -> Self {
@@ -72,66 +106,55 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    pub fn get_single_with_coord(
-        &self,
-    ) -> Option<(
-        [isize; 2],
-        <<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'_>,
-    )> {
-        let (val, edge, cell_id) = self.cell_q.get_single().ok()?;
-        let chunk_id = edge.targets(RelationId::of::<InChunk<L>>())[0];
-        let cell_i = self
-            .chunk_q
-            .get(chunk_id)
-            .unwrap()
-            .0
-            .cells
-            .get_by_right(&cell_id)
-            .cloned()
-            .unwrap();
-
-        let map = self.map_q.get_single().ok()?;
-        let chunk_coord = map.chunks.get_by_right(&chunk_id).unwrap();
-
-        Some((
-            calculate_cell_coordinate(chunk_coord.0, cell_i, L::CHUNK_SIZE),
-            val,
-        ))
-    }
-
-    pub fn iter_mut_with_coord(&mut self) -> CellQueryIter<'_, 's, L, Q, F> {
-        CellQueryIter {
-            cell_iter: self.cell_q.iter_mut(),
-            chunk_q: &self.chunk_q,
-            map_q: &self.map_q,
-        }
-    }
-
-    pub fn get(
+    pub fn get_at(
         &self,
         cell_c: [isize; 2],
     ) -> Option<<<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'_>> {
         let map = self.map_q.get_single().ok()?;
         let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
-        let chunk_e = map.chunks.get_by_left(&chunk_c.into())?;
+        let chunk_e = map.chunks.get(&chunk_c.into())?;
 
         let chunk = self.chunk_q.get(*chunk_e).ok()?;
         let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
-        let cell_e = chunk.0.cells.get_by_left(&cell_index)?;
+        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
 
-        self.cell_q.get(*cell_e).ok().map(|res| res.0)
+        self.cell_q.get(*cell_e).ok()
     }
 
-    pub fn get_mut(&mut self, cell_c: [isize; 2]) -> Option<<Q as WorldQuery>::Item<'_>> {
+    pub fn get_at_mut(&mut self, cell_c: [isize; 2]) -> Option<<Q as WorldQuery>::Item<'_>> {
         let map = self.map_q.get_single().ok()?;
         let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
-        let chunk_e = map.chunks.get_by_left(&chunk_c.into())?;
+        let chunk_e = map.chunks.get(&chunk_c.into())?;
 
         let chunk = self.chunk_q.get(*chunk_e).ok()?;
         let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
-        let cell_e = chunk.0.cells.get_by_left(&cell_index)?;
+        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
 
-        self.cell_q.get_mut(*cell_e).ok().map(|res| res.0)
+        self.cell_q.get_mut(*cell_e).ok()
+    }
+}
+
+impl<'w, 's, L, Q, F> Deref for CellQuery<'w, 's, L, Q, F>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    type Target = Query<'w, 's, Q, (F, Relations<InChunk<L>>)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.cell_q
+    }
+}
+
+impl<'w, 's, L, Q, F> DerefMut for CellQuery<'w, 's, L, Q, F>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.cell_q
     }
 }
 
@@ -196,47 +219,5 @@ where
 {
     pub(crate) fn new() -> Self {
         Self { label: PhantomData }
-    }
-}
-
-pub struct CellQueryIter<'w, 's, L, Q, F>
-where
-    L: CellMapLabel + 'static,
-    Q: WorldQuery + 'static,
-    F: ReadOnlyWorldQuery + 'static,
-{
-    cell_iter: QueryIter<'w, 's, (Q, Relations<InChunk<L>>, Entity), F>,
-    chunk_q: &'w Query<'w, 's, (&'static Chunk, Relations<InMap<L>>)>,
-    map_q: &'w Query<'w, 's, &'static CellMap, With<MapLabel<L>>>,
-}
-
-impl<'w, 's, L, Q, F> Iterator for CellQueryIter<'w, 's, L, Q, F>
-where
-    L: CellMapLabel + 'static,
-    Q: WorldQuery + 'static,
-    F: ReadOnlyWorldQuery + 'static,
-{
-    type Item = ([isize; 2], <Q as WorldQuery>::Item<'w>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (val, edge, cell_id) = self.cell_iter.next()?;
-        let chunk_id = edge.targets(RelationId::of::<InChunk<L>>())[0];
-        let cell_i = self
-            .chunk_q
-            .get(chunk_id)
-            .unwrap()
-            .0
-            .cells
-            .get_by_right(&cell_id)
-            .cloned()
-            .unwrap();
-
-        let map = self.map_q.get_single().ok()?;
-        let chunk_coord = map.chunks.get_by_right(&chunk_id).unwrap();
-
-        Some((
-            calculate_cell_coordinate(chunk_coord.0, cell_i, L::CHUNK_SIZE),
-            val,
-        ))
     }
 }

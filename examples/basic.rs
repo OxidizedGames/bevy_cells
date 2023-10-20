@@ -8,7 +8,7 @@ use bevy::{
     DefaultPlugins,
 };
 use bevy_cells::{
-    tiles::{CellMapLabel, CellQuery},
+    tiles::{CellCoord, CellMapLabel, CellQuery},
     CellCommandExt,
 };
 
@@ -80,11 +80,9 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    character: CellQuery<GameLayer, (), With<Character>>,
+    character: CellQuery<GameLayer, CellCoord<GameLayer>, With<Character>>,
     walls: CellQuery<GameLayer, (), With<Block>>,
 ) {
-    let (char_c, _) = character.get_single_with_coord().unwrap();
-
     let mut x = if keyboard_input.just_pressed(KeyCode::A) {
         -1
     } else {
@@ -107,15 +105,17 @@ fn move_character(
         0
     };
 
+    let char_c: [isize; 2] = character.get_single().unwrap().into();
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
-    if walls.get([char_c[0] + x, char_c[1] + y]).is_none() {
+    if walls.get_at([char_c[0] + x, char_c[1] + y]).is_none() {
         commands.move_cell::<GameLayer>(char_c, new_coord);
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, &mut Transform>) {
-    for (cell_c, mut transform) in cells.iter_mut_with_coord() {
+fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord<GameLayer>, &mut Transform)>) {
+    for (cell_c, mut transform) in cells.iter_mut() {
+        let cell_c: [isize; 2] = cell_c.into();
         transform.translation.x = cell_c[0] as f32 * 16.0;
         transform.translation.y = cell_c[1] as f32 * 16.0;
     }
