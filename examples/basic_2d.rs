@@ -24,22 +24,14 @@ impl CellMapLabel for GameLayer {
     const CHUNK_SIZE: usize = 16;
 }
 
-#[derive(Resource)]
-struct ExampleAssets {
-    block: Handle<Image>,
-    character: Handle<Image>,
-}
-
 fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let assets = ExampleAssets {
-        block: asset_server.load("block.png"),
-        character: asset_server.load("character.png"),
-    };
+    let block = asset_server.load("block.png");
+    let character = asset_server.load("character.png");
 
     commands.spawn(Camera2dBundle::default());
 
     let sprite_bundle = SpriteBundle {
-        texture: assets.block,
+        texture: block,
         ..Default::default()
     };
 
@@ -60,7 +52,7 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
         (
             Character,
             SpriteBundle {
-                texture: assets.character,
+                texture: character,
                 ..Default::default()
             },
         ),
@@ -89,6 +81,7 @@ fn move_character(
     } else {
         0
     };
+
     y -= if keyboard_input.just_pressed(KeyCode::S) {
         1
     } else {
@@ -98,7 +91,7 @@ fn move_character(
     let char_c = character.get_single().unwrap();
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
-    if walls.get_at([char_c[0] + x, char_c[1] + y]).is_none() {
+    if walls.get_at(new_coord).is_none() {
         commands.move_cell::<GameLayer, 2>(*char_c, new_coord);
     }
 }

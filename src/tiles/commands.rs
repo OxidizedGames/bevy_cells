@@ -4,7 +4,7 @@ use aery::{
 };
 use bevy::{
     ecs::system::Command,
-    prelude::{Entity, With, World},
+    prelude::{info, warn, Entity, With, World},
 };
 
 use super::{
@@ -32,7 +32,7 @@ where
 
 pub struct SpawnCell<L, const N: usize = 2> {
     pub cell_c: [isize; N],
-    pub cell_e: Entity,
+    pub cell_id: Entity,
     pub label: std::marker::PhantomData<L>,
 }
 
@@ -73,7 +73,7 @@ where
             let map_id = map_e.id();
 
             map_e.world_scope(|world| {
-                chunk_id = Some(world.spawn(Chunk::new(L::CHUNK_SIZE.pow(2))).id());
+                chunk_id = Some(world.spawn(Chunk::new(L::CHUNK_SIZE.pow(N as u32))).id());
                 Set::<InMap<L>>::new(chunk_id.unwrap(), map_id).apply(world);
             });
 
@@ -95,15 +95,15 @@ where
         let mut chunk = chunk_e.get_mut::<Chunk>().unwrap();
 
         if let Some(cell) = chunk.cells.get_mut(cell_i) {
-            if let Some(old_cell_id) = cell.replace(self.cell_e) {
+            if let Some(old_cell_id) = cell.replace(self.cell_id) {
                 world.despawn(old_cell_id);
             }
         }
 
-        Set::<InChunk<L>>::new(self.cell_e, chunk_id).apply(world);
+        Set::<InChunk<L>>::new(self.cell_id, chunk_id).apply(world);
 
         world
-            .get_entity_mut(self.cell_e)
+            .get_entity_mut(self.cell_id)
             .unwrap()
             .insert((CellIndex::from(cell_i), CellCoord::<N>::from(self.cell_c)));
     }
@@ -177,7 +177,7 @@ where
 
         SpawnCell::<L, N> {
             cell_c: self.new_c,
-            cell_e: old_cell_id,
+            cell_id: old_cell_id,
             label: self.label,
         }
         .apply(world);

@@ -62,7 +62,7 @@ where
     }
 }
 
-impl<'w, 's, L, Q, F> Deref for CellQuery<'w, 's, L, Q, F>
+impl<'w, 's, L, Q, F, const N: usize> Deref for CellQuery<'w, 's, L, Q, F, N>
 where
     L: CellMapLabel + 'static,
     Q: WorldQuery + 'static,
@@ -75,7 +75,7 @@ where
     }
 }
 
-impl<'w, 's, L, Q, F> DerefMut for CellQuery<'w, 's, L, Q, F>
+impl<'w, 's, L, Q, F, const N: usize> DerefMut for CellQuery<'w, 's, L, Q, F, N>
 where
     L: CellMapLabel + 'static,
     Q: WorldQuery + 'static,

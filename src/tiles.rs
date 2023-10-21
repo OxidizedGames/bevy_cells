@@ -10,7 +10,7 @@ pub mod commands;
 // Cell Components
 // ===============
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub(crate) struct CellIndex(usize);
 
 impl From<usize> for CellIndex {
@@ -27,7 +27,7 @@ impl Deref for CellIndex {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub(crate) struct CellCoord<const N: usize = 2>([isize; N]);
 
 impl<const N: usize> From<[isize; N]> for CellCoord<N> {
@@ -52,7 +52,7 @@ pub struct InChunk<L>(std::marker::PhantomData<L>);
 // Chunk Components
 // ================
 
-#[derive(Component, PartialEq, Eq, Hash)]
+#[derive(Component, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ChunkCoord<const N: usize = 2>([isize; N]);
 
 impl<const N: usize> From<[isize; N]> for ChunkCoord<N> {

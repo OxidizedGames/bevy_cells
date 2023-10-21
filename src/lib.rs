@@ -1,17 +1,6 @@
 use std::marker::PhantomData;
 
-use aery::{
-    edges::CheckedDespawn,
-    prelude::{Set, Unset},
-    scope::EntityMutExt,
-};
-use bevy::{
-    ecs::{
-        system::{Command, EntityCommands},
-        world::EntityMut,
-    },
-    prelude::*,
-};
+use bevy::{ecs::system::EntityCommands, prelude::*};
 use tiles::CellMapLabel;
 
 use tiles::commands::{DespawnMap, MoveCell, SpawnCell};
@@ -105,7 +94,7 @@ impl<'w, 's> CellCommandExt<'w, 's> for Commands<'w, 's> {
         let cell_e = self.spawn(bundle).id();
         self.add(SpawnCell::<L, N> {
             cell_c,
-            cell_e,
+            cell_id: cell_e,
             label: std::marker::PhantomData,
         });
         self.entity(cell_e)
