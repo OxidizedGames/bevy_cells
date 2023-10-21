@@ -1,16 +1,96 @@
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
+
 use aery::{
     edges::CheckedDespawn,
     prelude::{Set, Unset},
 };
 use bevy::{
-    ecs::system::Command,
-    prelude::{info, warn, Entity, With, World},
+    ecs::system::{Command, EntityCommands},
+    prelude::{Bundle, Commands, Entity, With, World},
 };
 
 use super::{
     calculate_cell_index, calculate_chunk_coordinate, CellCoord, CellIndex, CellMap, CellMapLabel,
     Chunk, InChunk, InMap,
 };
+
+pub struct CellCommands<'a, 'w, 's, L, const N: usize> {
+    commands: &'a mut Commands<'w, 's>,
+    phantom: PhantomData<L>,
+}
+
+impl<'a, 'w, 's, L, const N: usize> Deref for CellCommands<'a, 'w, 's, L, N>
+where
+    L: CellMapLabel + 'static,
+{
+    type Target = Commands<'w, 's>;
+
+    fn deref(&self) -> &Self::Target {
+        self.commands
+    }
+}
+
+impl<'a, 'w, 's, L, const N: usize> DerefMut for CellCommands<'a, 'w, 's, L, N>
+where
+    L: CellMapLabel + 'static,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.commands
+    }
+}
+
+pub trait CellCommandExt<'w, 's> {
+    fn cells<'a, L, const N: usize>(&'a mut self) -> CellCommands<'a, 'w, 's, L, N>
+    where
+        L: CellMapLabel + 'static;
+}
+
+impl<'w, 's> CellCommandExt<'w, 's> for Commands<'w, 's> {
+    fn cells<L, const N: usize>(&mut self) -> CellCommands<'_, 'w, 's, L, N>
+    where
+        L: CellMapLabel + 'static,
+    {
+        CellCommands {
+            commands: self,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, 'w, 's, L, const N: usize> CellCommands<'a, 'w, 's, L, N>
+where
+    L: CellMapLabel + 'static,
+{
+    pub fn spawn_cell<T>(&mut self, cell_c: [isize; N], bundle: T) -> EntityCommands<'w, 's, '_>
+    where
+        T: Bundle + 'static,
+    {
+        let cell_e = self.spawn(bundle).id();
+        self.add(SpawnCell::<L, N> {
+            cell_c,
+            cell_id: cell_e,
+            label: std::marker::PhantomData,
+        });
+        self.entity(cell_e)
+    }
+
+    pub fn despawn_map(&mut self) -> &mut Self {
+        self.add(DespawnMap::<L, N> { label: PhantomData });
+        self
+    }
+
+    pub fn move_cell(&mut self, old_c: [isize; N], new_c: [isize; N]) -> &mut Self {
+        self.add(MoveCell::<L, N> {
+            old_c,
+            new_c,
+            label: PhantomData,
+        });
+        self
+    }
+}
 
 pub struct DespawnMap<L, const N: usize = 2> {
     pub label: std::marker::PhantomData<L>,

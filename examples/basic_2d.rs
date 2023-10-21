@@ -1,6 +1,6 @@
 use aery::Aery;
 use bevy::{prelude::*, sprite::SpriteBundle, DefaultPlugins};
-use bevy_cells::{prelude::*, CellCommandExt};
+use bevy_cells::prelude::*;
 
 fn main() {
     App::new()
@@ -29,6 +29,7 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     let character = asset_server.load("character.png");
 
     commands.spawn(Camera2dBundle::default());
+    let mut cell_commands = commands.cells::<GameLayer, 2>();
 
     let sprite_bundle = SpriteBundle {
         texture: block,
@@ -37,17 +38,17 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // spawn a 10 * 10 room
     for x in -5..=5 {
-        commands.spawn_cell::<GameLayer, _, 2>([x, 5], (Block, sprite_bundle.clone()));
-        commands.spawn_cell::<GameLayer, _, 2>([x, -5], (Block, sprite_bundle.clone()));
+        cell_commands.spawn_cell([x, 5], (Block, sprite_bundle.clone()));
+        cell_commands.spawn_cell([x, -5], (Block, sprite_bundle.clone()));
     }
 
     for y in -4..=4 {
-        commands.spawn_cell::<GameLayer, _, 2>([5, y], (Block, sprite_bundle.clone()));
-        commands.spawn_cell::<GameLayer, _, 2>([-5, y], (Block, sprite_bundle.clone()));
+        cell_commands.spawn_cell([5, y], (Block, sprite_bundle.clone()));
+        cell_commands.spawn_cell([-5, y], (Block, sprite_bundle.clone()));
     }
 
     // spawn a player
-    commands.spawn_cell::<GameLayer, _, 2>(
+    cell_commands.spawn_cell(
         [0, 0],
         (
             Character,
@@ -65,6 +66,8 @@ fn move_character(
     character: CellQuery<GameLayer, CellCoord, With<Character>>,
     walls: CellQuery<GameLayer, (), With<Block>>,
 ) {
+    let mut cell_commands = commands.cells::<GameLayer, 2>();
+
     let mut x = if keyboard_input.just_pressed(KeyCode::A) {
         -1
     } else {
@@ -92,7 +95,7 @@ fn move_character(
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
     if walls.get_at(new_coord).is_none() {
-        commands.move_cell::<GameLayer, 2>(*char_c, new_coord);
+        cell_commands.move_cell(*char_c, new_coord);
     }
 }
 

@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use aery::Aery;
 use bevy::{pbr::CascadeShadowConfigBuilder, prelude::*, DefaultPlugins};
-use bevy_cells::{prelude::*, CellCommandExt};
+use bevy_cells::prelude::*;
 
 fn main() {
     App::new()
@@ -58,19 +58,21 @@ fn spawn(
         ..Default::default()
     };
 
+    let mut cell_commands = commands.cells::<GameLayer, 3>();
+
     // spawn a 10 * 10 room
     for x in -5..=5 {
-        commands.spawn_cell::<GameLayer, _, 3>([x, 0, 5], (Block, block_mesh.clone()));
-        commands.spawn_cell::<GameLayer, _, 3>([x, 0, -5], (Block, block_mesh.clone()));
+        cell_commands.spawn_cell([x, 0, 5], (Block, block_mesh.clone()));
+        cell_commands.spawn_cell([x, 0, -5], (Block, block_mesh.clone()));
     }
 
     for z in -4..=4 {
-        commands.spawn_cell::<GameLayer, _, 3>([5, 0, z], (Block, block_mesh.clone()));
-        commands.spawn_cell::<GameLayer, _, 3>([-5, 0, z], (Block, block_mesh.clone()));
+        cell_commands.spawn_cell([5, 0, z], (Block, block_mesh.clone()));
+        cell_commands.spawn_cell([-5, 0, z], (Block, block_mesh.clone()));
     }
 
     // spawn a player
-    commands.spawn_cell::<GameLayer, _, 3>(
+    cell_commands.spawn_cell(
         [0, 0, 0],
         (
             Character,
@@ -112,6 +114,8 @@ fn move_character(
     character: CellQuery<GameLayer, CellCoord<3>, With<Character>, 3>,
     walls: CellQuery<GameLayer, (), With<Block>, 3>,
 ) {
+    let mut cell_commands = commands.cells::<GameLayer, 3>();
+
     let mut x = if keyboard_input.just_pressed(KeyCode::A) {
         -1
     } else {
@@ -149,7 +153,7 @@ fn move_character(
     let new_coord = [char_c[0] + x, char_c[1] + y, char_c[2] + z];
 
     if walls.get_at(new_coord).is_none() {
-        commands.move_cell::<GameLayer, 3>(*char_c, new_coord);
+        cell_commands.move_cell(*char_c, new_coord);
     }
 }
 

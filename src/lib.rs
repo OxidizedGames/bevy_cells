@@ -13,8 +13,8 @@ pub mod prelude {
     use bevy::ecs::query::WorldQuery;
 
     pub use crate::tiles::cellquery::*;
+    pub use crate::tiles::commands::{CellCommandExt, CellCommands};
     pub use crate::tiles::CellMapLabel;
-    pub use crate::CellCommandExt;
 
     use crate::tiles;
 
@@ -55,68 +55,5 @@ pub mod prelude {
         fn deref(&self) -> &Self::Target {
             self.inner
         }
-    }
-}
-
-pub trait CellCommandExt<'w, 's> {
-    fn spawn_cell<L, T, const N: usize>(
-        &mut self,
-        cell_c: [isize; N],
-        bundle: T,
-    ) -> EntityCommands<'w, 's, '_>
-    where
-        T: Bundle + 'static,
-        L: CellMapLabel + 'static;
-
-    fn despawn_map<L, const N: usize>(&mut self) -> &mut Commands<'w, 's>
-    where
-        L: CellMapLabel + Send + 'static;
-
-    fn move_cell<L, const N: usize>(
-        &mut self,
-        old_c: [isize; N],
-        new_c: [isize; N],
-    ) -> &mut Commands<'w, 's>
-    where
-        L: CellMapLabel + Send + 'static;
-}
-
-impl<'w, 's> CellCommandExt<'w, 's> for Commands<'w, 's> {
-    fn spawn_cell<L, T, const N: usize>(
-        &mut self,
-        cell_c: [isize; N],
-        bundle: T,
-    ) -> EntityCommands<'w, 's, '_>
-    where
-        T: Bundle + 'static,
-        L: CellMapLabel + 'static,
-    {
-        let cell_e = self.spawn(bundle).id();
-        self.add(SpawnCell::<L, N> {
-            cell_c,
-            cell_id: cell_e,
-            label: std::marker::PhantomData,
-        });
-        self.entity(cell_e)
-    }
-
-    fn despawn_map<L, const N: usize>(&mut self) -> &mut Self
-    where
-        L: CellMapLabel + Send + 'static,
-    {
-        self.add(DespawnMap::<L, N> { label: PhantomData });
-        self
-    }
-
-    fn move_cell<L, const N: usize>(&mut self, old_c: [isize; N], new_c: [isize; N]) -> &mut Self
-    where
-        L: CellMapLabel + Send + 'static,
-    {
-        self.add(MoveCell::<L, N> {
-            old_c,
-            new_c,
-            label: PhantomData,
-        });
-        self
     }
 }
