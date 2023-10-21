@@ -1,16 +1,6 @@
 use aery::Aery;
-use bevy::{
-    prelude::{
-        info, App, AssetServer, Camera2dBundle, Commands, Component, Handle, Image, Input, KeyCode,
-        PostUpdate, Res, Resource, Startup, Transform, Update, Vec3, With,
-    },
-    sprite::SpriteBundle,
-    DefaultPlugins,
-};
-use bevy_cells::{
-    tiles::{CellCoord, CellMapLabel, CellQuery},
-    CellCommandExt,
-};
+use bevy::{prelude::*, sprite::SpriteBundle, DefaultPlugins};
+use bevy_cells::{prelude::*, CellCommandExt};
 
 fn main() {
     App::new()
@@ -55,17 +45,17 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // spawn a 10 * 10 room
     for x in -5..=5 {
-        commands.spawn_cell::<GameLayer, _>([x, 5], (Block, sprite_bundle.clone()));
-        commands.spawn_cell::<GameLayer, _>([x, -5], (Block, sprite_bundle.clone()));
+        commands.spawn_cell::<GameLayer, _, 2>([x, 5], (Block, sprite_bundle.clone()));
+        commands.spawn_cell::<GameLayer, _, 2>([x, -5], (Block, sprite_bundle.clone()));
     }
 
     for y in -4..=4 {
-        commands.spawn_cell::<GameLayer, _>([5, y], (Block, sprite_bundle.clone()));
-        commands.spawn_cell::<GameLayer, _>([-5, y], (Block, sprite_bundle.clone()));
+        commands.spawn_cell::<GameLayer, _, 2>([5, y], (Block, sprite_bundle.clone()));
+        commands.spawn_cell::<GameLayer, _, 2>([-5, y], (Block, sprite_bundle.clone()));
     }
 
     // spawn a player
-    commands.spawn_cell::<GameLayer, _>(
+    commands.spawn_cell::<GameLayer, _, 2>(
         [0, 0],
         (
             Character,
@@ -80,7 +70,7 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    character: CellQuery<GameLayer, CellCoord<GameLayer>, With<Character>>,
+    character: CellQuery<GameLayer, CellCoord, With<Character>>,
     walls: CellQuery<GameLayer, (), With<Block>>,
 ) {
     let mut x = if keyboard_input.just_pressed(KeyCode::A) {
@@ -105,17 +95,16 @@ fn move_character(
         0
     };
 
-    let char_c: [isize; 2] = character.get_single().unwrap().into();
+    let char_c = character.get_single().unwrap();
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
     if walls.get_at([char_c[0] + x, char_c[1] + y]).is_none() {
-        commands.move_cell::<GameLayer>(char_c, new_coord);
+        commands.move_cell::<GameLayer, 2>(*char_c, new_coord);
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord<GameLayer>, &mut Transform)>) {
+fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord, &mut Transform)>) {
     for (cell_c, mut transform) in cells.iter_mut() {
-        let cell_c: [isize; 2] = cell_c.into();
         transform.translation.x = cell_c[0] as f32 * 16.0;
         transform.translation.y = cell_c[1] as f32 * 16.0;
     }

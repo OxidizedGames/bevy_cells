@@ -1,58 +1,73 @@
-use std::{any::TypeId, marker::PhantomData};
-
-use aery::tuple_traits::RelationEntries;
-use aery::{prelude::*, relation::RelationId};
-use bevy::ecs::query::QueryIter;
-use bevy::{
-    ecs::{
-        query::{ReadOnlyWorldQuery, WorldQuery},
-        system::{ReadOnlySystemParam, SystemParam},
-    },
-    prelude::*,
-};
-use bimap::BiHashMap;
+use aery::prelude::*;
+use bevy::prelude::*;
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
+
+pub mod cellquery;
+pub mod commands;
+
+// ===============
+// Cell Components
+// ===============
 
 #[derive(Component)]
-pub struct CellIndex<L>(usize, PhantomData<L>);
+pub(crate) struct CellIndex(usize);
 
-impl<L> CellIndex<L> {
-    pub(crate) fn new(index: usize) -> Self {
-        Self(index, PhantomData)
+impl From<usize> for CellIndex {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for CellIndex {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 #[derive(Component)]
-pub struct CellChunk<L>([isize; 2], PhantomData<L>);
+pub(crate) struct CellCoord<const N: usize = 2>([isize; N]);
 
-impl<L> CellChunk<L> {
-    pub(crate) fn new(coord: [isize; 2]) -> Self {
-        Self(coord, PhantomData)
+impl<const N: usize> From<[isize; N]> for CellCoord<N> {
+    fn from(value: [isize; N]) -> Self {
+        Self(value)
     }
 }
 
-#[derive(WorldQuery)]
-pub struct CellCoord<L>
-where
-    L: CellMapLabel + 'static,
-{
-    index: &'static CellIndex<L>,
-    chunk: &'static CellChunk<L>,
-}
+impl<const N: usize> Deref for CellCoord<N> {
+    type Target = [isize; N];
 
-impl<L> From<CellCoordItem<'_, L>> for [isize; 2]
-where
-    L: CellMapLabel,
-{
-    fn from(value: CellCoordItem<'_, L>) -> Self {
-        calculate_cell_coordinate(value.chunk.0, value.index.0, L::CHUNK_SIZE)
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
 #[derive(Relation)]
 #[aery(Recursive)]
 pub struct InChunk<L>(std::marker::PhantomData<L>);
+
+// ================
+// Chunk Components
+// ================
+
+#[derive(Component, PartialEq, Eq, Hash)]
+pub(crate) struct ChunkCoord<const N: usize = 2>([isize; N]);
+
+impl<const N: usize> From<[isize; N]> for ChunkCoord<N> {
+    fn from(value: [isize; N]) -> Self {
+        Self(value)
+    }
+}
+
+impl<const N: usize> Deref for ChunkCoord<N> {
+    type Target = [isize; N];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Component)]
 pub struct Chunk {
@@ -71,101 +86,49 @@ impl Chunk {
 #[aery(Recursive)]
 pub(crate) struct InMap<L>(std::marker::PhantomData<L>);
 
-#[derive(Component, Default)]
-pub struct CellMap {
-    pub(crate) chunks: HashMap<ChunkCoord<2>, Entity>,
+// ==============
+// Map Components
+// ==============
+
+/// Adds type level info on how a Cell Map should be treated.
+pub trait CellMapLabel: Send + Sync {
+    /// How many cells per dimension a chunk in this map extends.
+    const CHUNK_SIZE: usize;
 }
 
-/// Used to query individual cells from a cell map.
-/// This query also implicitly queries chunks and maps
-/// in order to properly resolve cells.
-#[derive(SystemParam)]
-pub struct CellQuery<'w, 's, L, Q, F = ()>
+#[derive(Component)]
+pub struct CellMap<L, const N: usize = 2>
 where
     L: CellMapLabel + 'static,
-    Q: WorldQuery + 'static,
-    F: ReadOnlyWorldQuery + 'static,
 {
-    cell_q: Query<'w, 's, Q, (F, Relations<InChunk<L>>)>,
-    chunk_q: Query<'w, 's, &'static Chunk, Relations<InMap<L>>>,
-    map_q: Query<'w, 's, &'static CellMap, With<MapLabel<L>>>,
+    pub(crate) chunks: HashMap<ChunkCoord<N>, Entity>,
+    label: std::marker::PhantomData<L>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
-pub(crate) struct ChunkCoord<const N: usize>(pub(crate) [isize; N]);
-
-impl<const N: usize> From<[isize; N]> for ChunkCoord<N> {
-    fn from(value: [isize; N]) -> Self {
-        Self(value)
-    }
-}
-
-impl<'w, 's, L, Q, F> CellQuery<'w, 's, L, Q, F>
+impl<L, const N: usize> Default for CellMap<L, N>
 where
     L: CellMapLabel + 'static,
-    Q: WorldQuery + 'static,
-    F: ReadOnlyWorldQuery + 'static,
 {
-    pub fn get_at(
-        &self,
-        cell_c: [isize; 2],
-    ) -> Option<<<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'_>> {
-        let map = self.map_q.get_single().ok()?;
-        let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
-        let chunk_e = map.chunks.get(&chunk_c.into())?;
-
-        let chunk = self.chunk_q.get(*chunk_e).ok()?;
-        let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
-        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
-
-        self.cell_q.get(*cell_e).ok()
-    }
-
-    pub fn get_at_mut(&mut self, cell_c: [isize; 2]) -> Option<<Q as WorldQuery>::Item<'_>> {
-        let map = self.map_q.get_single().ok()?;
-        let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
-        let chunk_e = map.chunks.get(&chunk_c.into())?;
-
-        let chunk = self.chunk_q.get(*chunk_e).ok()?;
-        let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
-        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
-
-        self.cell_q.get_mut(*cell_e).ok()
+    fn default() -> Self {
+        Self {
+            chunks: Default::default(),
+            label: Default::default(),
+        }
     }
 }
 
-impl<'w, 's, L, Q, F> Deref for CellQuery<'w, 's, L, Q, F>
-where
-    L: CellMapLabel + 'static,
-    Q: WorldQuery + 'static,
-    F: ReadOnlyWorldQuery + 'static,
-{
-    type Target = Query<'w, 's, Q, (F, Relations<InChunk<L>>)>;
+// ================
+// Helper Functions
+// ================
 
-    fn deref(&self) -> &Self::Target {
-        &self.cell_q
-    }
-}
-
-impl<'w, 's, L, Q, F> DerefMut for CellQuery<'w, 's, L, Q, F>
-where
-    L: CellMapLabel + 'static,
-    Q: WorldQuery + 'static,
-    F: ReadOnlyWorldQuery + 'static,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.cell_q
-    }
-}
-
-pub(crate) fn calculate_chunk_coordinate<const N: usize>(
+pub fn calculate_chunk_coordinate<const N: usize>(
     cell_c: [isize; N],
     chunk_size: usize,
 ) -> [isize; N] {
     cell_c.map(|c| c / (chunk_size as isize) - if c < 0 { 1 } else { 0 })
 }
 
-pub(crate) fn calculate_chunk_relative_cell_coordinate<const N: usize>(
+pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
     mut cell_c: [isize; N],
     chunk_size: usize,
 ) -> [isize; N] {
@@ -176,7 +139,7 @@ pub(crate) fn calculate_chunk_relative_cell_coordinate<const N: usize>(
     cell_c
 }
 
-pub(crate) fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usize) -> usize {
+pub fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usize) -> usize {
     let mut index = 0;
     let relative_cell_c = calculate_chunk_relative_cell_coordinate(cell_c, chunk_size);
     for (i, c) in relative_cell_c.iter().enumerate() {
@@ -185,7 +148,7 @@ pub(crate) fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_siz
     index
 }
 
-pub(crate) fn calculate_cell_coordinate<const N: usize>(
+pub fn calculate_cell_coordinate<const N: usize>(
     chunk_c: [isize; N],
     cell_i: usize,
     chunk_size: usize,
@@ -199,25 +162,4 @@ pub(crate) fn calculate_cell_coordinate<const N: usize>(
         }
     }
     chunk_world_c
-}
-
-pub trait CellMapLabel: Send + Sync {
-    const CHUNK_SIZE: usize;
-}
-
-#[derive(Component)]
-pub struct MapLabel<L>
-where
-    L: CellMapLabel + 'static,
-{
-    label: std::marker::PhantomData<L>,
-}
-
-impl<L> MapLabel<L>
-where
-    L: CellMapLabel + 'static,
-{
-    pub(crate) fn new() -> Self {
-        Self { label: PhantomData }
-    }
 }
