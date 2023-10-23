@@ -1,9 +1,4 @@
-use std::marker::PhantomData;
-
-use bevy::{ecs::system::EntityCommands, prelude::*};
-use tiles::CellMapLabel;
-
-use tiles::commands::{DespawnMap, MoveCell, SpawnCell};
+#![deny(clippy::all)]
 
 pub mod tiles;
 
