@@ -64,7 +64,7 @@ fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
     character: CellQuery<GameLayer, CellCoord, With<Character>>,
-    walls: CellQuery<GameLayer, (), With<Block>>,
+    walls: CellQuery<GameLayer, (), (With<Block>, Without<Character>)>,
 ) {
     let mut cell_commands = commands.cells::<GameLayer, 2>();
 
@@ -94,9 +94,11 @@ fn move_character(
     let char_c = character.get_single().unwrap();
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
-    if walls.get_at(new_coord).is_none() {
-        cell_commands.move_cell(*char_c, new_coord);
+    if walls.get_at(new_coord).is_some() {
+        let new_wall_coord = [wall_c[0] + x, wall_c[1] + y];
+        cell_commands.move_cell(*wall_c, new_coord);
     }
+    cell_commands.move_cell(*char_c, new_coord);
 }
 
 fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord, &mut Transform)>) {
