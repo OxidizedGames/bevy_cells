@@ -58,11 +58,11 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    /// Get's the entity at the cell coordinate in the cell map, if it still exists.
+    /// Get's the readonly query item for the given cell.
     pub fn get_at(
-        &'w self,
+        &self,
         cell_c: [isize; N],
-    ) -> Option<<<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'w>> {
+    ) -> Option<<<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'_>> {
         let map = self.map_q.get_single().ok()?;
         let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
         let chunk_e = map.chunks.get(&chunk_c.into())?;
@@ -74,8 +74,8 @@ where
         self.cell_q.get(*cell_e).ok()
     }
 
-    /// Get's the entity mutably at the cell coordinate in the cell map, if it still exists.
-    pub fn get_at_mut(&'w mut self, cell_c: [isize; N]) -> Option<<Q as WorldQuery>::Item<'w>> {
+    /// Get's the query item for the given cell.
+    pub fn get_at_mut(&mut self, cell_c: [isize; N]) -> Option<<Q as WorldQuery>::Item<'_>> {
         let map = self.map_q.get_single().ok()?;
         let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
         let chunk_e = map.chunks.get(&chunk_c.into())?;
@@ -85,6 +85,24 @@ where
         let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
 
         self.cell_q.get_mut(*cell_e).ok()
+    }
+
+    /// Get's the query item for the given cell.
+    /// # Safety
+    /// This function makes it possible to violate Rust's aliasing guarantees: please use responsibly.
+    pub unsafe fn get_at_unchecked(
+        &self,
+        cell_c: [isize; N],
+    ) -> Option<<Q as WorldQuery>::Item<'_>> {
+        let map = self.map_q.get_single().ok()?;
+        let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
+        let chunk_e = map.chunks.get(&chunk_c.into())?;
+
+        let chunk = self.chunk_q.get(*chunk_e).ok()?;
+        let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
+
+        self.cell_q.get_unchecked(*cell_e).ok()
     }
 
     /// Iterate over all the cells in a given space, starting at `corner_1`
@@ -97,17 +115,15 @@ where
         CellQueryIter::new(self, corner_1, corner_2)
     }
 
-    /*
     /// Iterate over all the cells in a given space, starting at `corner_1`
     /// inclusive over `corner_2`
     pub fn iter_in_mut(
-        &'w mut self,
+        &mut self,
         corner_1: [isize; N],
         corner_2: [isize; N],
-    ) -> CellQueryIterMut<'w, 's, L, Q, F, N> {
-        CellQueryIterMut::new(self, corner_1, corner_2)
+    ) -> CellQueryIterMut<'_, 's, L, Q, F, N> {
+        unsafe { CellQueryIterMut::new(self, corner_1, corner_2) }
     }
-    */
 
     pub fn to_readonly(
         &self,
@@ -151,7 +167,7 @@ where
 impl<'w, 's, L, Q, F, const N: usize> Iterator for CellQueryIter<'w, 's, L, Q, F, N>
 where
     L: CellMapLabel + 'static,
-    for<'i> Q: WorldQuery + 'static,
+    Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
     type Item = <<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'w>;
@@ -176,7 +192,7 @@ where
     F: ReadOnlyWorldQuery + 'static,
 {
     coord_iter: CoordIterator<N>,
-    cell_q: &'w mut CellQuery<'w, 's, L, Q, F, N>,
+    cell_q: &'w CellQuery<'w, 's, L, Q, F, N>,
 }
 
 impl<'w, 's, L, Q, F, const N: usize> CellQueryIterMut<'w, 's, L, Q, F, N>
@@ -185,8 +201,12 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    fn new(
-        cell_q: &'w mut CellQuery<'w, 's, L, Q, F, N>,
+    /// # Safety
+    /// This iterator uses unchecked get's to get around some lifetime issue I don't understand yet.
+    /// Due to this, you should only call this constructor from a context where the query is actually
+    /// borrowed mutabley.
+    unsafe fn new(
+        cell_q: &'w CellQuery<'w, 's, L, Q, F, N>,
         corner_1: [isize; N],
         corner_2: [isize; N],
     ) -> Self {
@@ -203,11 +223,13 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    type Item = Q::Item<'w>;
+    type Item = <Q as WorldQuery>::Item<'w>;
 
+    #[allow(clippy::while_let_on_iterator)]
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(target) = self.coord_iter.next() {
-            let cell = self.cell_q.get_at_mut(target);
+            // This fixes some lifetime issue that I'm not sure I understand quite yet, will do testing
+            let cell = unsafe { self.cell_q.get_at_unchecked(target) };
             if cell.is_some() {
                 return cell;
             }
