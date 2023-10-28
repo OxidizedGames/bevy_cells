@@ -2,7 +2,7 @@ use aery::Aery;
 use bevy::{
     math::Vec2Swizzles, prelude::*, sprite::SpriteBundle, window::PrimaryWindow, DefaultPlugins,
 };
-use bevy_cells::prelude::*;
+use bevy_cells::{prelude::*, tiles::helpers::world_to_cell};
 use std::ops::{Deref, DerefMut};
 
 fn main() {
@@ -53,8 +53,8 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
 
     // spawn a 10 * 10 group
-    for x in -5..=5 {
-        for y in -5..=5 {
+    for x in -50..=50 {
+        for y in -50..=50 {
             cell_commands.spawn_cell([x, y], (Block, sprite_bundle.clone()));
             cell_commands.spawn_cell([x, -y], (Block, sprite_bundle.clone()));
         }
@@ -74,11 +74,11 @@ fn add_damage(
         .then(|| windows.single().cursor_position())
         .flatten()
         .and_then(|cursor| cam.viewport_to_world(cam_t, cursor.xy()))
-        .map(|ray| (ray.origin.truncate() + Vec2::new(8.0, 8.0)) / 16.0)
-        .map(|pos| [pos.x as isize, pos.y as isize])
+        .map(|ray| ray.origin.truncate())
+        .map(|pos| world_to_cell(pos.into(), 16.0))
     {
-        let start = [damage_pos[0] - 1, damage_pos[1] - 1];
-        let end = [damage_pos[0] + 1, damage_pos[1] + 1];
+        let start = [damage_pos[0] - 2, damage_pos[1] - 2];
+        let end = [damage_pos[0] + 2, damage_pos[1] + 2];
         for (block_id, damage) in blocks.iter_in_mut(start, end) {
             if let Some(mut damage) = damage {
                 **damage += 1;
@@ -99,7 +99,7 @@ fn check_damage(
             x => {
                 let tint = 1.0 - x as f32 / 3.0;
                 sprite.color = Color::Rgba {
-                    red: tint,
+                    red: 1.0,
                     green: tint,
                     blue: tint,
                     alpha: 1.0,

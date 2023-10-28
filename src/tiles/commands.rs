@@ -3,6 +3,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use super::{CellCoord, CellIndex, CellMap, CellMapLabel, Chunk, InChunk, InMap};
+use crate::tiles::helpers::*;
 use aery::{
     edges::CheckedDespawn,
     prelude::{Set, Unset},
@@ -10,11 +12,6 @@ use aery::{
 use bevy::{
     ecs::system::{Command, EntityCommands},
     prelude::{Bundle, Commands, Entity, With, World},
-};
-
-use super::{
-    calculate_cell_index, calculate_chunk_coordinate, CellCoord, CellIndex, CellMap, CellMapLabel,
-    Chunk, InChunk, InMap,
 };
 
 pub struct CellCommands<'a, 'w, 's, L, const N: usize> {

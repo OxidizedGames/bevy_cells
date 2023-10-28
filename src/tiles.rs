@@ -3,8 +3,9 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use std::ops::Deref;
 
-pub mod cellquery;
+pub mod cell_query;
 pub mod commands;
+pub mod helpers;
 
 // ===============
 // Cell Components
@@ -115,51 +116,4 @@ where
             label: Default::default(),
         }
     }
-}
-
-// ================
-// Helper Functions
-// ================
-
-pub fn calculate_chunk_coordinate<const N: usize>(
-    cell_c: [isize; N],
-    chunk_size: usize,
-) -> [isize; N] {
-    cell_c.map(|c| c / (chunk_size as isize) - if c < 0 { 1 } else { 0 })
-}
-
-pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
-    mut cell_c: [isize; N],
-    chunk_size: usize,
-) -> [isize; N] {
-    let chunk_c = calculate_chunk_coordinate(cell_c, chunk_size);
-    for i in 0..N {
-        cell_c[i] -= chunk_c[i] * chunk_size as isize;
-    }
-    cell_c
-}
-
-pub fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usize) -> usize {
-    let mut index = 0;
-    let relative_cell_c = calculate_chunk_relative_cell_coordinate(cell_c, chunk_size);
-    for (i, c) in relative_cell_c.iter().enumerate() {
-        index += (*c as usize) * chunk_size.pow(i as u32);
-    }
-    index
-}
-
-pub fn calculate_cell_coordinate<const N: usize>(
-    chunk_c: [isize; N],
-    cell_i: usize,
-    chunk_size: usize,
-) -> [isize; N] {
-    let mut chunk_world_c = chunk_c.map(|c| c * chunk_size as isize);
-    for (i, c) in chunk_world_c.iter_mut().enumerate() {
-        if i == 0 {
-            *c += (cell_i % chunk_size) as isize;
-        } else {
-            *c += (cell_i / chunk_size.pow(i as u32)) as isize;
-        }
-    }
-    chunk_world_c
 }

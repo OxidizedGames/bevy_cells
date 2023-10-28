@@ -7,7 +7,7 @@ pub mod prelude {
 
     use bevy::ecs::query::WorldQuery;
 
-    pub use crate::tiles::cellquery::*;
+    pub use crate::tiles::cell_query::*;
     pub use crate::tiles::commands::{CellCommandExt, CellCommands};
     pub use crate::tiles::CellMapLabel;
 
