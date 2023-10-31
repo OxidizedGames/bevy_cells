@@ -1,21 +1,22 @@
 #![deny(clippy::all)]
 
-pub mod tiles;
+pub mod cells;
+pub(crate) mod utilities;
 
 pub mod prelude {
     use std::ops::Deref;
 
     use bevy::ecs::query::WorldQuery;
 
-    pub use crate::tiles::cell_query::*;
-    pub use crate::tiles::commands::{CellCommandExt, CellCommands};
-    pub use crate::tiles::CellMapLabel;
+    pub use crate::cells::cell_query::*;
+    pub use crate::cells::commands::{CellCommandExt, CellCommands};
+    pub use crate::cells::CellMapLabel;
 
-    use crate::tiles;
+    use crate::cells;
 
     #[derive(WorldQuery)]
     pub struct CellIndex {
-        inner: &'static tiles::CellIndex,
+        inner: &'static cells::CellIndex,
     }
 
     impl<'w> Deref for CellIndexItem<'w> {
@@ -28,7 +29,7 @@ pub mod prelude {
 
     #[derive(WorldQuery)]
     pub struct CellCoord<const N: usize = 2> {
-        inner: &'static tiles::CellCoord<N>,
+        inner: &'static cells::CellCoord<N>,
     }
 
     impl<'w, const N: usize> Deref for CellCoordItem<'w, N> {
@@ -41,7 +42,7 @@ pub mod prelude {
 
     #[derive(WorldQuery)]
     pub struct ChunkCoord<const N: usize = 2> {
-        inner: &'static tiles::ChunkCoord<N>,
+        inner: &'static cells::ChunkCoord<N>,
     }
 
     impl<'w, const N: usize> Deref for ChunkCoordItem<'w, N> {

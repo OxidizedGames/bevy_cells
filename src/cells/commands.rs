@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::{CellCoord, CellIndex, CellMap, CellMapLabel, Chunk, InChunk, InMap};
-use crate::tiles::helpers::*;
+use crate::cells::coords::*;
 use aery::{
     edges::CheckedDespawn,
     prelude::{Set, Unset},

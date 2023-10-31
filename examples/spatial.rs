@@ -2,7 +2,7 @@ use aery::Aery;
 use bevy::{
     math::Vec2Swizzles, prelude::*, sprite::SpriteBundle, window::PrimaryWindow, DefaultPlugins,
 };
-use bevy_cells::{prelude::*, tiles::helpers::world_to_cell};
+use bevy_cells::{cells::coords::world_to_cell, prelude::*};
 use std::ops::{Deref, DerefMut};
 
 fn main() {
