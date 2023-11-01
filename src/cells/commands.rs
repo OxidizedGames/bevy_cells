@@ -109,17 +109,12 @@ where
         self.entity(chunk_id)
     }
 
-    pub fn despawn_chunk<T>(&mut self, chunk_c: [isize; N], bundle: T) -> EntityCommands<'w, 's, '_>
-    where
-        T: Bundle + 'static,
-    {
-        let chunk_id = self.spawn(bundle).id();
-        self.add(SpawnChunk::<L, N> {
+    pub fn despawn_chunk(&mut self, chunk_c: [isize; N]) -> &mut Self {
+        self.add(DespawnChunk::<L, N> {
             chunk_c,
-            chunk_id,
             label: std::marker::PhantomData,
         });
-        self.entity(chunk_id)
+        self
     }
 }
 

@@ -8,7 +8,10 @@ use bevy::{
     window::PrimaryWindow,
     DefaultPlugins,
 };
-use bevy_cells::{cells::coords::world_to_cell, prelude::*};
+use bevy_cells::{
+    cells::coords::{calculate_chunk_coordinate, world_to_cell},
+    prelude::*,
+};
 use std::ops::{Deref, DerefMut};
 
 fn main() {
@@ -83,13 +86,17 @@ fn add_damage(
     buttons: Res<Input<MouseButton>>,
 ) {
     let (cam, cam_t) = camera.single();
-    if let Some(damage_pos) = buttons
-        .just_pressed(MouseButton::Left)
-        .then(|| windows.single().cursor_position())
-        .flatten()
+    let cursor_pos = windows
+        .single()
+        .cursor_position()
         .and_then(|cursor| cam.viewport_to_world(cam_t, cursor.xy()))
         .map(|ray| ray.origin.truncate())
-        .map(|pos| world_to_cell(pos.into(), 16.0))
+        .map(|pos| world_to_cell(pos.into(), 16.0));
+
+    if let Some(damage_pos) = buttons
+        .just_pressed(MouseButton::Left)
+        .then_some(cursor_pos)
+        .flatten()
     {
         let start = [damage_pos[0] - 2, damage_pos[1] - 2];
         let end = [damage_pos[0] + 2, damage_pos[1] + 2];
@@ -100,6 +107,14 @@ fn add_damage(
                 commands.entity(block_id).insert(Damage(1));
             }
         }
+    }
+    if let Some(damage_pos) = buttons
+        .just_pressed(MouseButton::Right)
+        .then_some(cursor_pos)
+        .flatten()
+    {
+        let chunk_c = calculate_chunk_coordinate(damage_pos, GameLayer::CHUNK_SIZE);
+        commands.cells::<GameLayer, 2>().despawn_chunk(chunk_c);
     }
 }
 
