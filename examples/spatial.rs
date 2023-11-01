@@ -1,6 +1,12 @@
 use aery::Aery;
 use bevy::{
-    math::Vec2Swizzles, prelude::*, sprite::SpriteBundle, window::PrimaryWindow, DefaultPlugins,
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    math::Vec2Swizzles,
+    prelude::*,
+    render::camera::ScalingMode,
+    sprite::SpriteBundle,
+    window::PrimaryWindow,
+    DefaultPlugins,
 };
 use bevy_cells::{cells::coords::world_to_cell, prelude::*};
 use std::ops::{Deref, DerefMut};
@@ -12,6 +18,8 @@ fn main() {
         .add_systems(Startup, spawn)
         .add_systems(Update, (add_damage, check_damage).chain())
         .add_systems(PostUpdate, sync_cell_transforms)
+        .add_plugins(LogDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .run();
 }
 
@@ -44,7 +52,13 @@ impl CellMapLabel for GameLayer {
 fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     let block = asset_server.load("block.png");
 
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle {
+        projection: OrthographicProjection {
+            scale: 1.0,
+            ..Camera2dBundle::default().projection
+        },
+        ..Default::default()
+    });
     let mut cell_commands = commands.cells::<GameLayer, 2>();
 
     let sprite_bundle = SpriteBundle {
@@ -53,8 +67,8 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
 
     // spawn a 10 * 10 group
-    for x in -50..=50 {
-        for y in -50..=50 {
+    for x in -500..=500 {
+        for y in -500..=500 {
             cell_commands.spawn_cell([x, y], (Block, sprite_bundle.clone()));
             cell_commands.spawn_cell([x, -y], (Block, sprite_bundle.clone()));
         }
