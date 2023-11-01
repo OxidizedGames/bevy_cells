@@ -1,7 +1,6 @@
 #![deny(clippy::all)]
 
 pub mod cells;
-pub(crate) mod utilities;
 
 pub mod prelude {
     use std::ops::Deref;

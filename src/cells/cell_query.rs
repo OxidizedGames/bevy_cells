@@ -10,7 +10,7 @@ use bevy::{
 };
 
 use super::{CellMap, CellMapLabel, Chunk, InChunk, InMap};
-use crate::{cells::coords::*, utilities::MaybeOwned};
+use crate::cells::coords::*;
 
 /// Used to query individual cells from a cell map.
 /// This query also implicitly queries chunks and maps
@@ -110,8 +110,8 @@ where
         &self,
         corner_1: [isize; N],
         corner_2: [isize; N],
-    ) -> CellQueryIter<'_, 's, L, <Q as WorldQuery>::ReadOnly, F, N> {
-        unsafe { CellQueryIter::new(MaybeOwned::Owned(self.to_readonly()), corner_1, corner_2) }
+    ) -> CellQueryIter<'_, 's, L, Q, F, N> {
+        unsafe { CellQueryIter::new(self, corner_1, corner_2) }
     }
 
     /// Iterate over all the cells in a given space, starting at `corner_1`
@@ -120,8 +120,8 @@ where
         &mut self,
         corner_1: [isize; N],
         corner_2: [isize; N],
-    ) -> CellQueryIter<'_, 's, L, Q, F, N> {
-        unsafe { CellQueryIter::new(MaybeOwned::Borrowed(self), corner_1, corner_2) }
+    ) -> CellQueryIterMut<'_, 's, L, Q, F, N> {
+        unsafe { CellQueryIterMut::new(self, corner_1, corner_2) }
     }
 
     pub fn to_readonly(
@@ -137,28 +137,25 @@ where
     /// Iter all cells in a given chunk.
     /// # Note
     /// The coordinates for this function are givne in chunk coordinates.
-    pub fn iter_in_chunk(
-        &self,
-        chunk_c: [isize; N],
-    ) -> CellQueryIter<'_, 's, L, <Q as WorldQuery>::ReadOnly, F, N> {
+    pub fn iter_in_chunk(&self, chunk_c: [isize; N]) -> CellQueryIter<'_, 's, L, Q, F, N> {
         // Get corners of chunk
         let corner_1 = calculate_cell_coordinate(chunk_c, 0, L::CHUNK_SIZE);
         let corner_2 =
             calculate_cell_coordinate(chunk_c, max_cell_index::<N>(L::CHUNK_SIZE), L::CHUNK_SIZE);
         // Create cell iter
-        unsafe { CellQueryIter::new(MaybeOwned::Owned(self.to_readonly()), corner_1, corner_2) }
+        unsafe { CellQueryIter::new(self, corner_1, corner_2) }
     }
 
     /// Iter all cells in a given chunk.
     /// # Note
     /// The coordinates for this function are givne in chunk coordinates.
-    pub fn iter_in_chunk_mut(&self, chunk_c: [isize; N]) -> CellQueryIter<'_, 's, L, Q, F, N> {
+    pub fn iter_in_chunk_mut(&self, chunk_c: [isize; N]) -> CellQueryIterMut<'_, 's, L, Q, F, N> {
         // Get corners of chunk
         let corner_1 = calculate_cell_coordinate(chunk_c, 0, L::CHUNK_SIZE);
         let corner_2 =
             calculate_cell_coordinate(chunk_c, max_cell_index::<N>(L::CHUNK_SIZE), L::CHUNK_SIZE);
         // Create cell iter
-        unsafe { CellQueryIter::new(MaybeOwned::Borrowed(self), corner_1, corner_2) }
+        unsafe { CellQueryIterMut::new(self, corner_1, corner_2) }
     }
 
     /// Iter all cells in the chunks in the given range.
@@ -168,13 +165,13 @@ where
         &mut self,
         chunk_c_1: [isize; N],
         chunk_c_2: [isize; N],
-    ) -> CellQueryIter<'_, 's, L, <Q as WorldQuery>::ReadOnly, F, N> {
+    ) -> CellQueryIter<'_, 's, L, Q, F, N> {
         // Get corners of chunk
         let corner_1 = calculate_cell_coordinate(chunk_c_1, 0, L::CHUNK_SIZE);
         let corner_2 =
             calculate_cell_coordinate(chunk_c_2, max_cell_index::<N>(L::CHUNK_SIZE), L::CHUNK_SIZE);
         // Create cell iter
-        unsafe { CellQueryIter::new(MaybeOwned::Owned(self.to_readonly()), corner_1, corner_2) }
+        unsafe { CellQueryIter::new(self, corner_1, corner_2) }
     }
 
     /// Iter all cells in the chunks in the given range.
@@ -184,13 +181,13 @@ where
         &mut self,
         chunk_c_1: [isize; N],
         chunk_c_2: [isize; N],
-    ) -> CellQueryIter<'_, 's, L, Q, F, N> {
+    ) -> CellQueryIterMut<'_, 's, L, Q, F, N> {
         // Get corners of chunk
         let corner_1 = calculate_cell_coordinate(chunk_c_1, 0, L::CHUNK_SIZE);
         let corner_2 =
             calculate_cell_coordinate(chunk_c_2, max_cell_index::<N>(L::CHUNK_SIZE), L::CHUNK_SIZE);
         // Create cell iter
-        unsafe { CellQueryIter::new(MaybeOwned::Borrowed(self), corner_1, corner_2) }
+        unsafe { CellQueryIterMut::new(self, corner_1, corner_2) }
     }
 }
 
@@ -201,7 +198,7 @@ where
     F: ReadOnlyWorldQuery + 'static,
 {
     coord_iter: CoordIterator<N>,
-    cell_q: MaybeOwned<'w, CellQuery<'w, 's, L, Q, F, N>>,
+    cell_q: &'w CellQuery<'w, 's, L, Q, F, N>,
 }
 
 impl<'w, 's, L, Q, F, const N: usize> CellQueryIter<'w, 's, L, Q, F, N>
@@ -215,7 +212,7 @@ where
     /// Due to this, you should only call this constructor from a context where the query is actually
     /// borrowed mutabley.
     unsafe fn new(
-        cell_q: MaybeOwned<'w, CellQuery<'w, 's, L, Q, F, N>>,
+        cell_q: &'w CellQuery<'w, 's, L, Q, F, N>,
         corner_1: [isize; N],
         corner_2: [isize; N],
     ) -> Self {
@@ -232,26 +229,70 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
+    type Item = <<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'w>;
+
+    #[allow(clippy::while_let_on_iterator)]
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(target) = self.coord_iter.next() {
+            // This fixes some lifetime issue that I'm not sure I understand quite yet, will do testing
+            let cell = self.cell_q.get_at(target);
+            if cell.is_some() {
+                return cell;
+            }
+        }
+
+        None
+    }
+}
+
+pub struct CellQueryIterMut<'w, 's, L, Q, F, const N: usize>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    coord_iter: CoordIterator<N>,
+    cell_q: &'w CellQuery<'w, 's, L, Q, F, N>,
+}
+
+impl<'w, 's, L, Q, F, const N: usize> CellQueryIterMut<'w, 's, L, Q, F, N>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    /// # Safety
+    /// This iterator uses unchecked get's to get around some lifetime issue I don't understand yet.
+    /// Due to this, you should only call this constructor from a context where the query is actually
+    /// borrowed mutabley.
+    unsafe fn new(
+        cell_q: &'w CellQuery<'w, 's, L, Q, F, N>,
+        corner_1: [isize; N],
+        corner_2: [isize; N],
+    ) -> Self {
+        Self {
+            cell_q,
+            coord_iter: CoordIterator::new(corner_1, corner_2),
+        }
+    }
+}
+
+impl<'w, 's, L, Q, F, const N: usize> Iterator for CellQueryIterMut<'w, 's, L, Q, F, N>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
     type Item = <Q as WorldQuery>::Item<'w>;
 
     #[allow(clippy::while_let_on_iterator)]
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(target) = self.coord_iter.next() {
             // This fixes some lifetime issue that I'm not sure I understand quite yet, will do testing
-            match self.cell_q {
-                MaybeOwned::Borrowed(b) => {
-                    let cell = unsafe { b.get_at_unchecked(target) };
-                    if cell.is_some() {
-                        return cell;
-                    }
-                }
-                MaybeOwned::Owned(ref o) => {
-                    let cell = unsafe { o.get_at_unchecked(target) };
-                    if cell.is_some() {
-                        return cell;
-                    }
-                }
-            };
+            let cell = unsafe { self.cell_q.get_at_unchecked(target) };
+            if cell.is_some() {
+                return cell;
+            }
         }
 
         None

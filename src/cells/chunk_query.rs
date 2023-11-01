@@ -10,7 +10,7 @@ use bevy::{
     prelude::Query,
 };
 
-use super::{CellMap, CellMapLabel, Chunk, InChunk, InMap};
+use super::{CellMap, CellMapLabel, Chunk, InMap};
 use crate::cells::coords::*;
 
 /// Used to query chunks from a cell map.
@@ -118,8 +118,8 @@ where
         &mut self,
         corner_1: [isize; N],
         corner_2: [isize; N],
-    ) -> ChunkQueryIter<'_, 's, L, Q, F, N> {
-        unsafe { ChunkQueryIter::new(self, corner_1, corner_2) }
+    ) -> ChunkQueryIterMut<'_, 's, L, Q, F, N> {
+        unsafe { ChunkQueryIterMut::new(self, corner_1, corner_2) }
     }
 
     pub fn to_readonly(
@@ -165,6 +165,60 @@ where
 }
 
 impl<'w, 's, L, Q, F, const N: usize> Iterator for ChunkQueryIter<'w, 's, L, Q, F, N>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    type Item = <<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'w>;
+
+    #[allow(clippy::while_let_on_iterator)]
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(target) = self.coord_iter.next() {
+            // This fixes some lifetime issue that I'm not sure I understand quite yet, will do testing
+            let cell = self.cell_q.get_at(target);
+            if cell.is_some() {
+                return cell;
+            }
+        }
+
+        None
+    }
+}
+
+pub struct ChunkQueryIterMut<'w, 's, L, Q, F, const N: usize>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    coord_iter: CoordIterator<N>,
+    cell_q: &'w ChunkQuery<'w, 's, L, Q, F, N>,
+}
+
+impl<'w, 's, L, Q, F, const N: usize> ChunkQueryIterMut<'w, 's, L, Q, F, N>
+where
+    L: CellMapLabel + 'static,
+    Q: WorldQuery + 'static,
+    F: ReadOnlyWorldQuery + 'static,
+{
+    /// # Safety
+    /// This iterator uses unchecked get's to get around some lifetime issue I don't understand yet.
+    /// Due to this, you should only call this constructor from a context where the query is actually
+    /// borrowed mutabley.
+    unsafe fn new(
+        cell_q: &'w ChunkQuery<'w, 's, L, Q, F, N>,
+        corner_1: [isize; N],
+        corner_2: [isize; N],
+    ) -> Self {
+        Self {
+            cell_q,
+            coord_iter: CoordIterator::new(corner_1, corner_2),
+        }
+    }
+}
+
+impl<'w, 's, L, Q, F, const N: usize> Iterator for ChunkQueryIterMut<'w, 's, L, Q, F, N>
 where
     L: CellMapLabel + 'static,
     Q: WorldQuery + 'static,
