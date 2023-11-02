@@ -14,6 +14,7 @@ use bevy::{
     prelude::{Bundle, Commands, Entity, With, World},
 };
 
+/// Applies commands to a specific cell map.
 pub struct CellCommands<'a, 'w, 's, L, const N: usize> {
     commands: &'a mut Commands<'w, 's>,
     phantom: PhantomData<L>,
@@ -40,6 +41,7 @@ where
 }
 
 pub trait CellCommandExt<'w, 's> {
+    /// Gets the [CellCommands] to apply commands at the cell map level.
     fn cells<'a, L, const N: usize>(&'a mut self) -> CellCommands<'a, 'w, 's, L, N>
     where
         L: CellMapLabel + 'static;
@@ -61,6 +63,8 @@ impl<'a, 'w, 's, L, const N: usize> CellCommands<'a, 'w, 's, L, N>
 where
     L: CellMapLabel + 'static,
 {
+    /// Spawns a cell and returns a handle to the underlying entity.
+    /// This will despawn any cell that already exists in this coordinate
     pub fn spawn_cell<T>(&mut self, cell_c: [isize; N], bundle: T) -> EntityCommands<'w, 's, '_>
     where
         T: Bundle + 'static,
@@ -74,11 +78,13 @@ where
         self.entity(cell_id)
     }
 
+    /// Recursively despawns a map and all it's chunks and cells.
     pub fn despawn_map(&mut self) -> &mut Self {
         self.add(DespawnMap::<L, N> { label: PhantomData });
         self
     }
 
+    /// Despawns a cell.
     pub fn despawn_cell(&mut self, cell_c: [isize; N]) -> &mut Self {
         self.add(DespawnCell::<L, N> {
             cell_c,
@@ -87,6 +93,7 @@ where
         self
     }
 
+    /// Moves a cell from one coordinate to another, overwriting and despawning any cell in the new coordinate.
     pub fn move_cell(&mut self, old_c: [isize; N], new_c: [isize; N]) -> &mut Self {
         self.add(MoveCell::<L, N> {
             old_c,
@@ -96,6 +103,7 @@ where
         self
     }
 
+    /// Manually spawn a chunk entity, note that this will overwrite and despawn existing chunks at this location.
     pub fn spawn_chunk<T>(&mut self, chunk_c: [isize; N], bundle: T) -> EntityCommands<'w, 's, '_>
     where
         T: Bundle + 'static,
@@ -109,6 +117,7 @@ where
         self.entity(chunk_id)
     }
 
+    /// Recursively despawn a chunk and all it's cells.
     pub fn despawn_chunk(&mut self, chunk_c: [isize; N]) -> &mut Self {
         self.add(DespawnChunk::<L, N> {
             chunk_c,
@@ -340,8 +349,8 @@ where
             world.spawn(CellMap::<L, N>::default())
         };
 
-        // Get the chunk or insert it
-        if map_e
+        // Despawn the chunk if it exists
+        if let Some(chunk_id) = map_e
             .get::<CellMap<L, N>>()
             .unwrap()
             .chunks
@@ -353,16 +362,22 @@ where
                     .get_entity(chunk_e)
                     .map(|chunk_e| chunk_e.id())
             })
-            .is_none()
         {
-            let mut chunk_id = None;
-            let map_id = map_e.id();
+            map_e.world_scope(|world| CheckedDespawn(chunk_id).apply(world));
+        }
 
-            map_e.world_scope(|world| {
-                chunk_id = Some(world.spawn(Chunk::new(L::CHUNK_SIZE.pow(N as u32))).id());
-                Set::<InMap<L>>::new(chunk_id.unwrap(), map_id).apply(world);
-            });
-        };
+        let map_id = map_e.id();
+
+        map_e.world_scope(|world| {
+            world
+                .get_entity_mut(self.chunk_id)
+                .unwrap()
+                .insert(Chunk::new(L::CHUNK_SIZE.pow(N as u32)));
+            Set::<InMap<L>>::new(self.chunk_id, map_id).apply(world);
+        });
+
+        let mut map = map_e.get_mut::<CellMap<L, N>>().unwrap();
+        map.chunks.insert(self.chunk_c.into(), self.chunk_id);
     }
 }
 
