@@ -10,7 +10,7 @@ use aery::{
     prelude::{Set, Unset},
 };
 use bevy::{
-    ecs::system::{Command, Despawn, EntityCommands},
+    ecs::system::{Command, EntityCommands},
     prelude::{Bundle, Commands, Entity, With, World},
 };
 

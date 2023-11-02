@@ -3,7 +3,6 @@ use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::Vec2Swizzles,
     prelude::*,
-    render::camera::ScalingMode,
     sprite::SpriteBundle,
     window::PrimaryWindow,
     DefaultPlugins,
