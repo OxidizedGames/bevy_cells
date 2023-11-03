@@ -2,6 +2,12 @@
 name = "bevy_cells"
 version = "0.0.1-dev"
 edition = "2021"
+authors = []"James Bell <jamescarterbell@gmail.com>"]
+license = "MIT"
+license-file = "LICENSE-MIT"
+description = "Bevy library for working with entities in grids."
+repository = "https://github.com/OxidizedGames/bevy_cells"
+homepage = "https://github.com/OxidizedGames/bevy_cells"
 
 
 [profile.dev]
