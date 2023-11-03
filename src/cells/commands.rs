@@ -125,6 +125,16 @@ where
         });
         self
     }
+
+    /// Swaps two cells if both exist, or just moves one cell if the other doesn't exist.
+    pub fn swap_cells(&mut self, cell_c_1: [isize; N], cell_c_2: [isize; N]) -> &mut Self {
+        self.add(SwapCell::<L, N> {
+            cell_c_1,
+            cell_c_2,
+            label: PhantomData,
+        });
+        self
+    }
 }
 
 pub struct DespawnMap<L, const N: usize = 2> {
@@ -249,6 +259,53 @@ where
             SpawnCell::<L, N> {
                 cell_c: self.new_c,
                 cell_id: old_cell_id,
+                label: self.label,
+            }
+            .apply(world);
+        }
+    }
+}
+
+pub struct SwapCell<L, const N: usize> {
+    pub cell_c_1: [isize; N],
+    pub cell_c_2: [isize; N],
+    pub label: std::marker::PhantomData<L>,
+}
+
+impl<L, const N: usize> Command for SwapCell<L, N>
+where
+    L: CellMapLabel + Send + 'static,
+{
+    fn apply(self, world: &mut World) {
+        if self.cell_c_1 == self.cell_c_2 {
+            return;
+        }
+
+        let cell_id_1 = DespawnCell::<L, N> {
+            cell_c: self.cell_c_1,
+            label: self.label,
+        }
+        .take_entity(world);
+
+        let cell_id_2 = DespawnCell::<L, N> {
+            cell_c: self.cell_c_2,
+            label: self.label,
+        }
+        .take_entity(world);
+
+        if let Some(cell_id) = cell_id_1 {
+            SpawnCell::<L, N> {
+                cell_c: self.cell_c_2,
+                cell_id,
+                label: self.label,
+            }
+            .apply(world);
+        }
+
+        if let Some(cell_id) = cell_id_2 {
+            SpawnCell::<L, N> {
+                cell_c: self.cell_c_1,
+                cell_id,
                 label: self.label,
             }
             .apply(world);
