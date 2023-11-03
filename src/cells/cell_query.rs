@@ -245,6 +245,15 @@ where
     }
 }
 
+/// ```compile_fail
+///# // Because we're using unsafe, we need to make sure we don't mutabley alias.
+///# fn multiple_iter_mut(mut cell_query: CellQuery<TestLayer, ()>) {
+///#     let mut iter_1 = cell_query.iter_in([0, 0], [3, 3]);
+///#     let mut iter_2 = cell_query.iter_in_mut([0, 0], [3, 3]);
+///#     let _ = iter_1.next();
+///#     let _ = iter_2.next();
+///# }
+/// ```
 pub struct CellQueryIterMut<'w, 's, L, Q, F, const N: usize>
 where
     L: CellMapLabel + 'static,
