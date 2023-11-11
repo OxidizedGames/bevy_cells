@@ -9,9 +9,9 @@ use aery::{
     edges::CheckedDespawn,
     prelude::{Set, Unset},
 };
-use bevy::{
-    ecs::system::{Command, EntityCommands},
-    prelude::{Bundle, Commands, Entity, With, World},
+use bevy_ecs::{
+    prelude::*,
+    system::{Command, EntityCommands},
 };
 
 /// Applies commands to a specific cell map.

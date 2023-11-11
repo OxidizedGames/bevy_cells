@@ -5,7 +5,7 @@ pub mod cells;
 pub mod prelude {
     use std::ops::Deref;
 
-    use bevy::ecs::query::WorldQuery;
+    use bevy_ecs::query::WorldQuery;
 
     pub use crate::cells::cell_query::*;
     pub use crate::cells::commands::{CellCommandExt, CellCommands};

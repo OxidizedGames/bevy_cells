@@ -1,17 +1,12 @@
-use std::ops::{Deref, DerefMut};
-
-use aery::prelude::*;
-use bevy::{
-    ecs::{
-        prelude::With,
-        query::{ReadOnlyWorldQuery, WorldQuery},
-        system::SystemParam,
-    },
-    prelude::Query,
-};
-
 use super::{CellMap, CellMapLabel, Chunk, InMap};
 use crate::cells::coords::*;
+use aery::prelude::*;
+use bevy_ecs::{
+    prelude::*,
+    query::{ReadOnlyWorldQuery, WorldQuery},
+    system::SystemParam,
+};
+use std::ops::{Deref, DerefMut};
 
 /// Used to query chunks from a cell map.
 /// This query also implicitly queries maps
