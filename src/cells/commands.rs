@@ -87,14 +87,13 @@ where
 
     /// Spawns a cell and returns a handle to the underlying entity.
     /// This will despawn any cell that already exists in this coordinate
-    pub fn spawn_cell_batch_with<F, B, IC>(&mut self, cell_c: IC, bundle_f: F)
+    pub fn spawn_cell_batch_with<F, B, IC>(&mut self, cell_cs: IC, bundle_f: F)
     where
         F: Fn([isize; N]) -> B + Send + 'static,
         B: Bundle + Send + 'static,
-        IC: IntoIterator<Item = [isize; N]>,
+        IC: IntoIterator<Item = [isize; N]> + Send + 'static,
     {
-        let cell_cs = cell_c.into_iter().collect();
-        self.add(SpawnCellBatch::<L, F, B, N> {
+        self.add(SpawnCellBatch::<L, F, B, IC, N> {
             cell_cs,
             bundle_f,
             label: std::marker::PhantomData,
@@ -238,31 +237,35 @@ where
     }
 }
 
-pub struct SpawnCellBatch<L, F, B, const N: usize = 2>
+pub struct SpawnCellBatch<L, F, B, IC, const N: usize = 2>
 where
     L: CellMapLabel + Send + 'static,
     F: Fn([isize; N]) -> B + Send + 'static,
     B: Bundle + Send + 'static,
+    IC: IntoIterator<Item = [isize; N]> + Send + 'static,
 {
-    pub cell_cs: Vec<[isize; N]>,
+    pub cell_cs: IC,
     pub bundle_f: F,
     pub label: std::marker::PhantomData<L>,
 }
 
-impl<L, F, B, const N: usize> Command for SpawnCellBatch<L, F, B, N>
+impl<L, F, B, IC, const N: usize> Command for SpawnCellBatch<L, F, B, IC, N>
 where
     L: CellMapLabel + Send + 'static,
     F: Fn([isize; N]) -> B + Send + 'static,
     B: Bundle + Send + 'static,
+    IC: IntoIterator<Item = [isize; N]> + Send + 'static,
 {
     fn apply(mut self, world: &mut World) {
+        let (cell_cs, bundles): (Vec<[isize; N]>, Vec<B>) = self
+            .cell_cs
+            .into_iter()
+            .map(|coord| (coord, (self.bundle_f)(coord)))
+            .unzip();
         // Group cells by chunk
         let mut cells = HashMap::new();
-        for (cell_id, cell_c) in world
-            .spawn_batch(self.cell_cs.iter().map(|coord| (self.bundle_f)(*coord)))
-            .zip(self.cell_cs.iter())
-        {
-            cells.insert(cell_id, *cell_c);
+        for (cell_id, cell_c) in world.spawn_batch(bundles).zip(cell_cs) {
+            cells.insert(cell_id, cell_c);
         }
 
         let mut chunked_cells = HashMap::new();
