@@ -17,8 +17,9 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-aery = "0.4"
-bevy = {version = "0.11.3", default-features = false}
+aery = "0.5.1"
+bevy = {version = "0.12", default-features = false}
 
 [dev-dependencies]
 rstest = "0.18.2"
+bevy = {version = "0.12", default-features = true}

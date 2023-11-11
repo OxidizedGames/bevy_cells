@@ -9,9 +9,9 @@ Currently, `bevy_cells` supports the following:
 * N-dimensional map support
 * Map based quiries
 * Spatial queries
+* Batched operations for better performance
 
 Upcoming features:
-* Batched operations for better performance
 * Automatigically handle hierarchical deletes (via aery support or supported directly in this crate)
 * Sort cells in memory based on chunk and map (will require bevy API additions in the future)
 

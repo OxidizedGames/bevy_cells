@@ -11,8 +11,15 @@ use aery::{
 };
 use bevy::{
     ecs::system::{Command, EntityCommands},
-    prelude::{Bundle, Commands, Entity, With, World},
+    prelude::{Bundle, Commands, Entity, EntityMut, With, World},
+    utils::{HashMap, HashSet},
 };
+use helpers::*;
+
+// REUSE THINGS BY MAKING HELPERS WHEN YOU CAN
+// BUT PLEASE UNDERSTAND THESE COMMANDS FLY IN THE FACE
+// OF NLL CONDITION #3 AND ARE A PITA TO MAKE HELPERS FOR
+mod helpers;
 
 /// Applies commands to a specific cell map.
 pub struct CellCommands<'a, 'w, 's, L, const N: usize> {
@@ -76,6 +83,22 @@ where
             label: std::marker::PhantomData,
         });
         self.entity(cell_id)
+    }
+
+    /// Spawns a cell and returns a handle to the underlying entity.
+    /// This will despawn any cell that already exists in this coordinate
+    pub fn spawn_cell_batch_with<F, B, IC>(&mut self, cell_c: IC, bundle_f: F)
+    where
+        F: Fn([isize; N]) -> B + Send + 'static,
+        B: Bundle + Send + 'static,
+        IC: IntoIterator<Item = [isize; N]>,
+    {
+        let cell_cs = cell_c.into_iter().collect();
+        self.add(SpawnCellBatch::<L, F, B, N> {
+            cell_cs,
+            bundle_f,
+            label: std::marker::PhantomData,
+        });
     }
 
     /// Recursively despawns a map and all it's chunks and cells.
@@ -167,51 +190,32 @@ where
 {
     fn apply(self, world: &mut World) {
         // Get the map or insert it
-        let mut map_e = if let Some(map) = world
+        let map_e = if let Some(map) = world
             .query_filtered::<Entity, With<CellMap<L, N>>>()
             .get_single_mut(world)
             .ok()
-            .and_then(|map_id| world.get_entity_mut(map_id))
+            .and_then(|map_id| world.get_entity(map_id))
         {
             map
         } else {
-            world.spawn(CellMap::<L, N>::default())
+            let map_id = world.spawn(CellMap::<L, N>::default()).id();
+            world.get_entity(map_id).unwrap()
         };
 
         // Get the chunk or insert it
         let chunk_c = calculate_chunk_coordinate(self.cell_c, L::CHUNK_SIZE).into();
-        let mut chunk_e = if let Some(chunk_id) = map_e
+        let map_id = map_e.id();
+        let mut chunk_e = if let Some([chunk_e]) = map_e
             .get::<CellMap<L, N>>()
             .unwrap()
             .chunks
             .get(&chunk_c)
-            .copied()
-            .and_then(|chunk_e| {
-                map_e
-                    .world()
-                    .get_entity(chunk_e)
-                    .map(|chunk_e| chunk_e.id())
-            }) {
-            world.get_entity_mut(chunk_id).unwrap()
+            .cloned()
+            .and_then(|chunk_id| world.get_many_entities_mut([chunk_id]).ok())
+        {
+            chunk_e
         } else {
-            let mut chunk_id = None;
-            let map_id = map_e.id();
-
-            map_e.world_scope(|world| {
-                chunk_id = Some(world.spawn(Chunk::new(L::CHUNK_SIZE.pow(N as u32))).id());
-                Set::<InMap<L>>::new(chunk_id.unwrap(), map_id).apply(world);
-            });
-
-            let chunk_id = chunk_id.unwrap();
-            let chunk_c = calculate_chunk_coordinate(self.cell_c, L::CHUNK_SIZE).into();
-
-            map_e
-                .get_mut::<CellMap<L, N>>()
-                .unwrap()
-                .chunks
-                .insert(chunk_c, chunk_id);
-
-            world.get_entity_mut(chunk_id).unwrap()
+            spawn_and_insert_chunk::<L, N>(chunk_c.0, map_id, world)
         };
 
         // Insert the tile
@@ -231,6 +235,130 @@ where
             .get_entity_mut(self.cell_id)
             .unwrap()
             .insert((CellIndex::from(cell_i), CellCoord::<N>::from(self.cell_c)));
+    }
+}
+
+pub struct SpawnCellBatch<L, F, B, const N: usize = 2>
+where
+    L: CellMapLabel + Send + 'static,
+    F: Fn([isize; N]) -> B + Send + 'static,
+    B: Bundle + Send + 'static,
+{
+    pub cell_cs: Vec<[isize; N]>,
+    pub bundle_f: F,
+    pub label: std::marker::PhantomData<L>,
+}
+
+impl<L, F, B, const N: usize> Command for SpawnCellBatch<L, F, B, N>
+where
+    L: CellMapLabel + Send + 'static,
+    F: Fn([isize; N]) -> B + Send + 'static,
+    B: Bundle + Send + 'static,
+{
+    fn apply(mut self, world: &mut World) {
+        // Group cells by chunk
+        let mut cells = HashMap::new();
+        for (cell_id, cell_c) in world
+            .spawn_batch(self.cell_cs.iter().map(|coord| (self.bundle_f)(*coord)))
+            .zip(self.cell_cs.iter())
+        {
+            cells.insert(cell_id, *cell_c);
+        }
+
+        let mut chunked_cells = HashMap::new();
+        for (chunk_coord, coord, ent) in cells
+            .drain()
+            .map(|(ent, coord)| (calculate_chunk_coordinate(coord, L::CHUNK_SIZE), coord, ent))
+        {
+            match chunked_cells.entry(chunk_coord) {
+                bevy::utils::hashbrown::hash_map::Entry::Vacant(v) => {
+                    v.insert(vec![(coord, ent)]);
+                }
+                bevy::utils::hashbrown::hash_map::Entry::Occupied(mut o) => {
+                    o.get_mut().push((coord, ent));
+                }
+            };
+        }
+
+        // Get the map or insert it
+        let map_e = if let Ok(map_id) = world
+            .query_filtered::<Entity, With<CellMap<L, N>>>()
+            .get_single_mut(world)
+        {
+            match world.get_entity(map_id) {
+                Some(map) => map,
+                None => {
+                    let map_id = world.spawn(CellMap::<L, N>::default()).id();
+                    world.get_entity(map_id).unwrap()
+                }
+            }
+        } else {
+            let map_id = world.spawn(CellMap::<L, N>::default()).id();
+            world.get_entity(map_id).unwrap()
+        };
+
+        let map_id = map_e.id();
+
+        // Get the chunks and entities from the map
+        let mut missing_chunks = Vec::new();
+        let mut map_slice = HashMap::new();
+        for (chunk_c, _) in chunked_cells.iter() {
+            if let Some(chunk_id) = map_e
+                .get::<CellMap<L, N>>()
+                .unwrap()
+                .chunks
+                .get(&(*chunk_c).into())
+            {
+                match world.get_entity(*chunk_id) {
+                    Some(entity) => {
+                        map_slice.insert(*chunk_c, entity.id());
+                    }
+                    None => missing_chunks.push(*chunk_c),
+                }
+            } else {
+                missing_chunks.push(*chunk_c);
+            };
+        }
+
+        // Insert missing chunks
+        for chunk_c in missing_chunks.drain(..) {
+            map_slice.insert(
+                chunk_c,
+                spawn_and_insert_chunk::<L, N>(chunk_c, map_id, world).id(),
+            );
+        }
+
+        for (chunk_c, cells) in chunked_cells.drain() {
+            let chunk_id = *map_slice.get(&chunk_c).unwrap();
+
+            let mut chunk_e = world.get_entity_mut(chunk_id).unwrap();
+
+            let mut chunk = chunk_e.get_mut::<Chunk>().unwrap();
+
+            let mut despawn_ids = Vec::new();
+            let mut cells_with_index = Vec::with_capacity(cells.len());
+            for (cell_c, cell_id) in cells {
+                // Insert the tile
+                let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+
+                if let Some(cell) = chunk.cells.get_mut(cell_i) {
+                    if let Some(old_cell_id) = cell.replace(cell_id) {
+                        despawn_ids.push(old_cell_id);
+                    }
+                }
+
+                cells_with_index.push((cell_c, cell_id, cell_i));
+            }
+
+            for (cell_c, cell_id, cell_i) in cells_with_index {
+                Set::<InChunk<L>>::new(cell_id, chunk_id).apply(world);
+
+                world
+                    .get_entity_mut(cell_id)
+                    .unwrap()
+                    .insert((CellIndex::from(cell_i), CellCoord::<N>::from(cell_c)));
+            }
+        }
     }
 }
 

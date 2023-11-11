@@ -21,7 +21,7 @@ fn main() {
         .add_systems(Update, (add_damage, check_damage).chain())
         .add_systems(PostUpdate, sync_cell_transforms)
         .add_plugins(LogDiagnosticsPlugin::default())
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin)
         .run();
 }
 
@@ -69,12 +69,9 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
 
     // spawn a 10 * 10 group
-    for x in -500..=500 {
-        for y in -500..=500 {
-            cell_commands.spawn_cell([x, y], (Block, sprite_bundle.clone()));
-            cell_commands.spawn_cell([x, -y], (Block, sprite_bundle.clone()));
-        }
-    }
+    let cell_coords = (-500..500).flat_map(|x| (-500..500).map(move |y| [x, y]));
+
+    cell_commands.spawn_cell_batch_with(cell_coords, move |_| (Block, sprite_bundle.clone()))
 }
 
 fn add_damage(
