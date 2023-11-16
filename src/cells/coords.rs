@@ -1,3 +1,4 @@
+#[inline]
 pub fn calculate_chunk_coordinate<const N: usize>(
     mut cell_c: [isize; N],
     chunk_size: usize,
@@ -8,6 +9,7 @@ pub fn calculate_chunk_coordinate<const N: usize>(
     cell_c
 }
 
+#[inline]
 pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
     mut cell_c: [isize; N],
     chunk_size: usize,
@@ -21,6 +23,7 @@ pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
     cell_c
 }
 
+#[inline]
 pub fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usize) -> usize {
     let mut index = 0;
     let relative_cell_c = calculate_chunk_relative_cell_coordinate(cell_c, chunk_size);
@@ -30,6 +33,7 @@ pub fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usiz
     index
 }
 
+#[inline]
 pub fn calculate_cell_coordinate<const N: usize>(
     chunk_c: [isize; N],
     cell_i: usize,
@@ -46,6 +50,7 @@ pub fn calculate_cell_coordinate<const N: usize>(
     chunk_world_c
 }
 
+#[inline]
 pub fn max_cell_index<const N: usize>(chunk_size: usize) -> usize {
     let mut index = 0;
     for i in 1..=N {
@@ -58,6 +63,7 @@ pub fn max_cell_index<const N: usize>(chunk_size: usize) -> usize {
 /// and the scale_f of the cell coordinates to world coordinates.
 /// (For example, if cells are being represented by 16x16 pixel sprites,
 /// the scale factor should be set to 16)
+#[inline]
 pub fn world_to_cell<const N: usize>(world_c: [f32; N], scale_f: f32) -> [isize; N] {
     world_c.map(|c| (c / scale_f - if c < 0.0 { 1.0 } else { 0.0 }) as isize)
 }
@@ -89,6 +95,7 @@ impl<const N: usize> CoordIterator<N> {
 impl<const N: usize> Iterator for CoordIterator<N> {
     type Item = [isize; N];
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.complete {
             return None;

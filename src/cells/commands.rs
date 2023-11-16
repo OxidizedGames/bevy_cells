@@ -85,7 +85,7 @@ where
         self.entity(cell_id)
     }
 
-    /// Spawns a cell and returns a handle to the underlying entity.
+    /// Spawns cells from the given iterator using the given function.
     /// This will despawn any cell that already exists in this coordinate
     pub fn spawn_cell_batch_with<F, B, IC>(&mut self, cell_cs: IC, bundle_f: F)
     where
@@ -262,6 +262,7 @@ where
             .into_iter()
             .map(|coord| (coord, (self.bundle_f)(coord)))
             .unzip();
+
         // Group cells by chunk
         let mut cells = HashMap::new();
         for (cell_id, cell_c) in world.spawn_batch(bundles).zip(cell_cs) {
@@ -283,35 +284,24 @@ where
             };
         }
 
-        // Get the map or insert it
-        let map_e = if let Ok(map_id) = world
+        // Remove the map, or spawn an entity to hold the map, then create an empty map
+        let (map_id, mut map) = if let Ok(map_id) = world
             .query_filtered::<Entity, With<CellMap<L, N>>>()
-            .get_single_mut(world)
+            .get_single(world)
         {
-            match world.get_entity(map_id) {
-                Some(map) => map,
-                None => {
-                    let map_id = world.spawn(CellMap::<L, N>::default()).id();
-                    world.get_entity(map_id).unwrap()
-                }
+            match world.get_entity_mut(map_id) {
+                Some(mut map) => (map.id(), map.take::<CellMap<L, N>>().unwrap()),
+                None => spawn_map_e_no_insert(world),
             }
         } else {
-            let map_id = world.spawn(CellMap::<L, N>::default()).id();
-            world.get_entity(map_id).unwrap()
+            spawn_map_e_no_insert(world)
         };
-
-        let map_id = map_e.id();
 
         // Get the chunks and entities from the map
         let mut missing_chunks = Vec::new();
         let mut map_slice = HashMap::new();
         for (chunk_c, _) in chunked_cells.iter() {
-            if let Some(chunk_id) = map_e
-                .get::<CellMap<L, N>>()
-                .unwrap()
-                .chunks
-                .get(&(*chunk_c).into())
-            {
+            if let Some(chunk_id) = map.chunks.get(&(*chunk_c).into()) {
                 match world.get_entity(*chunk_id) {
                     Some(entity) => {
                         map_slice.insert(*chunk_c, entity.id());
@@ -327,7 +317,7 @@ where
         for chunk_c in missing_chunks.drain(..) {
             map_slice.insert(
                 chunk_c,
-                spawn_and_insert_chunk::<L, N>(chunk_c, map_id, world).id(),
+                spawn_and_insert_chunk_map_removed::<L, N>(chunk_c, map_id, &mut map, world).id(),
             );
         }
 
@@ -362,6 +352,8 @@ where
                     .insert((CellIndex::from(cell_i), CellCoord::<N>::from(cell_c)));
             }
         }
+
+        world.get_entity_mut(map_id).unwrap().insert(map);
     }
 }
 
