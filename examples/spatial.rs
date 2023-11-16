@@ -1,6 +1,7 @@
 use aery::Aery;
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    log::LogPlugin,
     math::Vec2Swizzles,
     prelude::*,
     sprite::SpriteBundle,
@@ -17,11 +18,11 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(Aery)
+        .add_plugins(LogDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin)
         .add_systems(Startup, spawn)
         .add_systems(Update, (add_damage, check_damage).chain())
         .add_systems(PostUpdate, sync_cell_transforms)
-        .add_plugins(LogDiagnosticsPlugin::default())
-        .add_plugins(FrameTimeDiagnosticsPlugin)
         .run();
 }
 

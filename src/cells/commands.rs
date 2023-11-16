@@ -11,8 +11,8 @@ use aery::{
 };
 use bevy::{
     ecs::system::{Command, EntityCommands},
-    prelude::{Bundle, Commands, Entity, EntityMut, With, World},
-    utils::{HashMap, HashSet},
+    prelude::{Bundle, Commands, Entity, With, World},
+    utils::HashMap,
 };
 use helpers::*;
 
@@ -256,7 +256,7 @@ where
     B: Bundle + Send + 'static,
     IC: IntoIterator<Item = [isize; N]> + Send + 'static,
 {
-    fn apply(mut self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         let (cell_cs, bundles): (Vec<[isize; N]>, Vec<B>) = self
             .cell_cs
             .into_iter()

@@ -1,17 +1,22 @@
 pub fn calculate_chunk_coordinate<const N: usize>(
-    cell_c: [isize; N],
+    mut cell_c: [isize; N],
     chunk_size: usize,
 ) -> [isize; N] {
-    cell_c.map(|c| c / (chunk_size as isize) - if c < 0 { 1 } else { 0 })
+    for i in cell_c.iter_mut() {
+        *i = *i / (chunk_size as isize) - if *i < 0 { 1 } else { 0 }
+    }
+    cell_c
 }
 
 pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
     mut cell_c: [isize; N],
     chunk_size: usize,
 ) -> [isize; N] {
-    let chunk_c = calculate_chunk_coordinate(cell_c, chunk_size);
-    for i in 0..N {
-        cell_c[i] -= chunk_c[i] * chunk_size as isize;
+    for i in cell_c.iter_mut() {
+        *i %= chunk_size as isize;
+        if *i < 0 {
+            *i += chunk_size as isize;
+        }
     }
     cell_c
 }
@@ -113,7 +118,7 @@ mod tests {
     use rstest::rstest;
     use std::ops::RangeInclusive;
 
-    use super::CoordIterator;
+    use super::*;
 
     fn make_range_iter(val_1: isize, val_2: isize) -> RangeInclusive<isize> {
         if val_1 < val_2 {
@@ -146,5 +151,19 @@ mod tests {
         let next = iter.next();
         println!("Fin: {:?}", next);
         assert_eq!(None, next);
+    }
+
+    #[rstest]
+    #[case(16, [15, 0], 15)]
+    #[case(16, [0, 15], 240)]
+    #[case(16, [15, 15], 255)]
+    #[case(16, [-1, -1], 255)]
+    #[case(16, [-16, -16], 0)]
+    fn cell_index_test(
+        #[case] chunk_size: usize,
+        #[case] cell_c: [isize; 2],
+        #[case] index: usize,
+    ) {
+        assert_eq!(calculate_cell_index(cell_c, chunk_size), index)
     }
 }
