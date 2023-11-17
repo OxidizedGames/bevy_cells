@@ -1,3 +1,5 @@
+mod basic_2D;
+
 use aery::Aery;
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
@@ -9,7 +11,10 @@ use bevy::{
     DefaultPlugins,
 };
 use bevy_cells::{
-    cells::coords::{calculate_chunk_coordinate, world_to_cell},
+    cells::{
+        coords::{calculate_chunk_coordinate, world_to_cell, CoordIterator},
+        CellCoord,
+    },
     prelude::*,
 };
 use std::ops::{Deref, DerefMut};
@@ -69,10 +74,9 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..Default::default()
     };
 
-    // spawn a 10 * 10 group
-    let cell_coords = (-500..500).flat_map(|x| (-500..500).map(move |y| [x, y]));
-
-    cell_commands.spawn_cell_batch_with(cell_coords, move |_| (Block, sprite_bundle.clone()))
+    cell_commands.spawn_cell_batch_with(CoordIterator::new([-250, -250], [250, 250]), move |_| {
+        (Block, sprite_bundle.clone())
+    })
 }
 
 fn add_damage(
@@ -135,7 +139,9 @@ fn check_damage(
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord, &mut Transform)>) {
+fn sync_cell_transforms(
+    mut cells: CellQuery<GameLayer, (&CellCoord, &mut Transform), Changed<CellCoord>>,
+) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32 * 16.0;
         transform.translation.y = cell_c[1] as f32 * 16.0;

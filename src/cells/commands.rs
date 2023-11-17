@@ -233,7 +233,7 @@ where
         world
             .get_entity_mut(self.cell_id)
             .unwrap()
-            .insert((CellIndex::from(cell_i), CellCoord::<N>::from(self.cell_c)));
+            .insert((CellIndex::from(cell_i), CellCoord::<N>::new(self.cell_c)));
     }
 }
 
@@ -349,7 +349,7 @@ where
                 world
                     .get_entity_mut(cell_id)
                     .unwrap()
-                    .insert((CellIndex::from(cell_i), CellCoord::<N>::from(cell_c)));
+                    .insert((CellIndex::from(cell_i), CellCoord::<N>::new(cell_c)));
             }
         }
 

@@ -27,19 +27,6 @@ pub mod prelude {
     }
 
     #[derive(WorldQuery)]
-    pub struct CellCoord<const N: usize = 2> {
-        inner: &'static cells::CellCoord<N>,
-    }
-
-    impl<'w, const N: usize> Deref for CellCoordItem<'w, N> {
-        type Target = [isize; N];
-
-        fn deref(&self) -> &Self::Target {
-            self.inner
-        }
-    }
-
-    #[derive(WorldQuery)]
     pub struct ChunkCoord<const N: usize = 2> {
         inner: &'static cells::ChunkCoord<N>,
     }
@@ -52,4 +39,3 @@ pub mod prelude {
         }
     }
 }
-

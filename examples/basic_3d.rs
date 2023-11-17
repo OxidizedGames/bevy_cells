@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use aery::Aery;
 use bevy::{pbr::CascadeShadowConfigBuilder, prelude::*, DefaultPlugins};
-use bevy_cells::prelude::*;
+use bevy_cells::{cells::CellCoord, prelude::*};
 
 fn main() {
     App::new()
@@ -111,7 +111,7 @@ fn spawn(
 fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    character: CellQuery<GameLayer, CellCoord<3>, With<Character>, 3>,
+    character: CellQuery<GameLayer, &CellCoord<3>, With<Character>, 3>,
     walls: CellQuery<GameLayer, (), With<Block>, 3>,
 ) {
     let mut cell_commands = commands.cells::<GameLayer, 3>();
@@ -153,11 +153,13 @@ fn move_character(
     let new_coord = [char_c[0] + x, char_c[1] + y, char_c[2] + z];
 
     if walls.get_at(new_coord).is_none() {
-        cell_commands.move_cell(*char_c, new_coord);
+        cell_commands.move_cell(**char_c, new_coord);
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord<3>, &mut Transform)>) {
+fn sync_cell_transforms(
+    mut cells: CellQuery<GameLayer, (&CellCoord<3>, &mut Transform), Changed<CellCoord<3>>>,
+) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32;
         transform.translation.y = cell_c[1] as f32;

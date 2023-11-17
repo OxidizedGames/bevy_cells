@@ -1,6 +1,6 @@
 use aery::Aery;
 use bevy::{prelude::*, sprite::SpriteBundle, DefaultPlugins};
-use bevy_cells::prelude::*;
+use bevy_cells::{cells::CellCoord, prelude::*};
 
 fn main() {
     App::new()
@@ -63,7 +63,7 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    character: CellQuery<GameLayer, CellCoord, With<Character>>,
+    character: CellQuery<GameLayer, &CellCoord, With<Character>>,
     walls: CellQuery<GameLayer, (), With<Block>>,
 ) {
     let mut cell_commands = commands.cells::<GameLayer, 2>();
@@ -95,11 +95,13 @@ fn move_character(
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
     if walls.get_at(new_coord).is_none() {
-        cell_commands.move_cell(*char_c, new_coord);
+        cell_commands.move_cell(**char_c, new_coord);
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord, &mut Transform)>) {
+fn sync_cell_transforms(
+    mut cells: CellQuery<GameLayer, (&CellCoord, &mut Transform), Changed<CellCoord>>,
+) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32 * 16.0;
         transform.translation.y = cell_c[1] as f32 * 16.0;

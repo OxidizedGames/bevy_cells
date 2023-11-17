@@ -30,10 +30,10 @@ impl Deref for CellIndex {
 }
 
 #[derive(Component, Debug)]
-pub(crate) struct CellCoord<const N: usize = 2>([isize; N]);
+pub struct CellCoord<const N: usize = 2>([isize; N]);
 
-impl<const N: usize> From<[isize; N]> for CellCoord<N> {
-    fn from(value: [isize; N]) -> Self {
+impl<const N: usize> CellCoord<N> {
+    pub(crate) fn new(value: [isize; N]) -> Self {
         Self(value)
     }
 }
