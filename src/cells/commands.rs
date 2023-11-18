@@ -11,7 +11,7 @@ use aery::{
 };
 use bevy::{
     ecs::system::{Command, EntityCommands},
-    prelude::{Bundle, Commands, Entity, With, World},
+    prelude::{info, Bundle, Commands, Entity, With, World},
     utils::HashMap,
 };
 use helpers::*;
@@ -188,39 +188,15 @@ where
     L: CellMapLabel + Send + 'static,
 {
     fn apply(self, world: &mut World) {
-        // Get the map or insert it
-        let map_e = if let Some(map) = world
-            .query_filtered::<Entity, With<CellMap<L, N>>>()
-            .get_single_mut(world)
-            .ok()
-            .and_then(|map_id| world.get_entity(map_id))
-        {
-            map
-        } else {
-            let map_id = world.spawn(CellMap::<L, N>::default()).id();
-            world.get_entity(map_id).unwrap()
-        };
+        // Take the map out and get the id to reinsert it
+        let (map_id, mut map) = spawn_or_remove_map::<L, N>(world);
 
-        // Get the chunk or insert it
-        let chunk_c = calculate_chunk_coordinate(self.cell_c, L::CHUNK_SIZE).into();
-        let map_id = map_e.id();
-        let mut chunk_e = if let Some([chunk_e]) = map_e
-            .get::<CellMap<L, N>>()
-            .unwrap()
-            .chunks
-            .get(&chunk_c)
-            .cloned()
-            .and_then(|chunk_id| world.get_many_entities_mut([chunk_id]).ok())
-        {
-            chunk_e
-        } else {
-            spawn_and_insert_chunk::<L, N>(chunk_c.0, map_id, world)
-        };
+        // Take the chunk out and get the id to reinsert it
+        let chunk_c = calculate_chunk_coordinate(self.cell_c, L::CHUNK_SIZE);
+        let (chunk_id, mut chunk) = spawn_or_remove_chunk::<L, N>(world, &mut map, map_id, chunk_c);
 
         // Insert the tile
         let cell_i = calculate_cell_index(self.cell_c, L::CHUNK_SIZE);
-        let chunk_id = chunk_e.id();
-        let mut chunk = chunk_e.get_mut::<Chunk>().unwrap();
 
         if let Some(cell) = chunk.cells.get_mut(cell_i) {
             if let Some(old_cell_id) = cell.replace(self.cell_id) {
@@ -234,6 +210,9 @@ where
             .get_entity_mut(self.cell_id)
             .unwrap()
             .insert((CellIndex::from(cell_i), CellCoord::<N>::new(self.cell_c)));
+
+        world.get_entity_mut(chunk_id).unwrap().insert(chunk);
+        world.get_entity_mut(map_id).unwrap().insert(map);
     }
 }
 
@@ -285,65 +264,24 @@ where
         }
 
         // Remove the map, or spawn an entity to hold the map, then create an empty map
-        let (map_id, mut map) = if let Ok(map_id) = world
-            .query_filtered::<Entity, With<CellMap<L, N>>>()
-            .get_single(world)
-        {
-            match world.get_entity_mut(map_id) {
-                Some(mut map) => (map.id(), map.take::<CellMap<L, N>>().unwrap()),
-                None => spawn_map_e_no_insert(world),
-            }
-        } else {
-            spawn_map_e_no_insert(world)
-        };
+        let (map_id, mut map) = spawn_or_remove_map::<L, N>(world);
 
         // Get the chunks and entities from the map
-        let mut missing_chunks = Vec::new();
-        let mut map_slice = HashMap::new();
-        for (chunk_c, _) in chunked_cells.iter() {
-            if let Some(chunk_id) = map.chunks.get(&(*chunk_c).into()) {
-                match world.get_entity(*chunk_id) {
-                    Some(entity) => {
-                        map_slice.insert(*chunk_c, entity.id());
-                    }
-                    None => missing_chunks.push(*chunk_c),
-                }
-            } else {
-                missing_chunks.push(*chunk_c);
-            };
-        }
+        let cells_with_chunk = Vec::from_iter(chunked_cells.drain().map(|(chunk_c, cells)| {
+            let (chunk_id, chunk) = spawn_or_remove_chunk(world, &mut map, map_id, chunk_c);
+            (chunk_id, chunk, cells)
+        }));
 
-        // Insert missing chunks
-        for chunk_c in missing_chunks.drain(..) {
-            map_slice.insert(
-                chunk_c,
-                spawn_and_insert_chunk_map_removed::<L, N>(chunk_c, map_id, &mut map, world).id(),
-            );
-        }
-
-        for (chunk_c, cells) in chunked_cells.drain() {
-            let chunk_id = *map_slice.get(&chunk_c).unwrap();
-
-            let mut chunk_e = world.get_entity_mut(chunk_id).unwrap();
-
-            let mut chunk = chunk_e.get_mut::<Chunk>().unwrap();
-
-            let mut despawn_ids = Vec::new();
-            let mut cells_with_index = Vec::with_capacity(cells.len());
+        for (chunk_id, mut chunk, cells) in cells_with_chunk {
             for (cell_c, cell_id) in cells {
-                // Insert the tile
                 let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
 
                 if let Some(cell) = chunk.cells.get_mut(cell_i) {
                     if let Some(old_cell_id) = cell.replace(cell_id) {
-                        despawn_ids.push(old_cell_id);
+                        world.despawn(old_cell_id);
                     }
                 }
 
-                cells_with_index.push((cell_c, cell_id, cell_i));
-            }
-
-            for (cell_c, cell_id, cell_i) in cells_with_index {
                 Set::<InChunk<L>>::new(cell_id, chunk_id).apply(world);
 
                 world
@@ -351,6 +289,8 @@ where
                     .unwrap()
                     .insert((CellIndex::from(cell_i), CellCoord::<N>::new(cell_c)));
             }
+
+            world.get_entity_mut(chunk_id).unwrap().insert(chunk);
         }
 
         world.get_entity_mut(map_id).unwrap().insert(map);
@@ -447,50 +387,16 @@ where
 {
     fn take_entity(self, world: &mut World) -> Option<Entity> {
         // Get the map or return
-        let map_e = world
-            .query_filtered::<Entity, With<CellMap<L, N>>>()
-            .get_single_mut(world)
-            .ok()
-            .and_then(|map_id| world.get_entity_mut(map_id))?;
+        let map = world.query::<&CellMap<L, N>>().get_single(world).ok()?;
 
         // Get the old chunk or return
-        let old_chunk_c = calculate_chunk_coordinate(self.cell_c, L::CHUNK_SIZE).into();
-        let mut old_chunk_e = if let Some(chunk_id) = map_e
-            .get::<CellMap<L, N>>()
-            .unwrap()
-            .chunks
-            .get(&old_chunk_c)
-            .copied()
-            .and_then(|chunk_e| {
-                map_e
-                    .world()
-                    .get_entity(chunk_e)
-                    .map(|chunk_e| chunk_e.id())
-            }) {
-            world.get_entity_mut(chunk_id).unwrap()
-        } else {
-            return None;
-        };
+        let chunk_c = calculate_chunk_coordinate(self.cell_c, L::CHUNK_SIZE);
+        let chunk_id = *map.chunks.get(&chunk_c.into())?;
+        let mut chunk = world.query::<&mut Chunk>().get_mut(world, chunk_id).ok()?;
 
         // Remove the old entity or return if the old entity is already deleted
-        let mut old_chunk = old_chunk_e.get_mut::<Chunk>().unwrap();
-        let old_cell_i = calculate_cell_index(self.cell_c, L::CHUNK_SIZE);
-        let old_cell_id = if let Some(Some(cell_id)) =
-            old_chunk.cells.get_mut(old_cell_i).map(|cell| cell.take())
-        {
-            cell_id
-        } else {
-            return None;
-        };
-
-        let old_chunk_id = old_chunk_e.id();
-
-        world.get_entity(old_cell_id)?;
-
-        // Remove the old relation
-        Unset::<InChunk<L>>::new(old_cell_id, old_chunk_id).apply(world);
-
-        Some(old_cell_id)
+        let cell_i = calculate_cell_index(self.cell_c, L::CHUNK_SIZE);
+        chunk.cells.get_mut(cell_i).and_then(|cell| cell.take())
     }
 }
 
@@ -517,47 +423,21 @@ where
     L: CellMapLabel + Send + 'static,
 {
     fn apply(self, world: &mut World) {
-        // Get the map or insert it
-        let mut map_e = if let Some(map) = world
-            .query_filtered::<Entity, With<CellMap<L, N>>>()
-            .get_single_mut(world)
-            .ok()
-            .and_then(|map_id| world.get_entity_mut(map_id))
-        {
-            map
-        } else {
-            world.spawn(CellMap::<L, N>::default())
-        };
+        let (map_id, mut map) = spawn_or_remove_map::<L, N>(world);
 
         // Despawn the chunk if it exists
-        if let Some(chunk_id) = map_e
-            .get::<CellMap<L, N>>()
-            .unwrap()
-            .chunks
-            .get(&self.chunk_c.into())
-            .copied()
-            .and_then(|chunk_e| {
-                map_e
-                    .world()
-                    .get_entity(chunk_e)
-                    .map(|chunk_e| chunk_e.id())
-            })
-        {
-            map_e.world_scope(|world| CheckedDespawn(chunk_id).apply(world));
+        if let Some(chunk_id) = map.chunks.insert(self.chunk_c.into(), self.chunk_id) {
+            CheckedDespawn(chunk_id).apply(world);
         }
 
-        let map_id = map_e.id();
+        world
+            .get_entity_mut(self.chunk_id)
+            .unwrap()
+            .insert(Chunk::new(L::CHUNK_SIZE.pow(N as u32)));
+        Set::<InMap<L>>::new(self.chunk_id, map_id).apply(world);
 
-        map_e.world_scope(|world| {
-            world
-                .get_entity_mut(self.chunk_id)
-                .unwrap()
-                .insert(Chunk::new(L::CHUNK_SIZE.pow(N as u32)));
-            Set::<InMap<L>>::new(self.chunk_id, map_id).apply(world);
-        });
-
-        let mut map = map_e.get_mut::<CellMap<L, N>>().unwrap();
         map.chunks.insert(self.chunk_c.into(), self.chunk_id);
+        world.entity_mut(map_id).insert(map);
     }
 }
 
@@ -572,19 +452,13 @@ where
 {
     fn take_entity(self, world: &mut World) -> Option<Entity> {
         // Get the map or return
-        let map_e = world
-            .query_filtered::<Entity, With<CellMap<L, N>>>()
+        let mut map = world
+            .query::<&mut CellMap<L, N>>()
             .get_single_mut(world)
-            .ok()
-            .and_then(|map_id| world.get_entity_mut(map_id))?;
+            .ok()?;
 
         // Get the old chunk or return
-        map_e
-            .get::<CellMap<L, N>>()
-            .unwrap()
-            .chunks
-            .get(&self.chunk_c.into())
-            .cloned()
+        map.chunks.remove(&self.chunk_c.into())
     }
 }
 

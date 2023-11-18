@@ -6,7 +6,7 @@ use bevy::{
         query::{ReadOnlyWorldQuery, WorldQuery},
         system::SystemParam,
     },
-    prelude::Query,
+    prelude::{info, Query},
 };
 
 use super::{CellMap, CellMapLabel, Chunk, InChunk, InMap};
