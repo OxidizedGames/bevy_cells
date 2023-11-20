@@ -1,9 +1,6 @@
-mod basic_2D;
-
 use aery::Aery;
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
-    log::LogPlugin,
     math::Vec2Swizzles,
     prelude::*,
     sprite::SpriteBundle,

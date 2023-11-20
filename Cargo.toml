@@ -19,6 +19,7 @@ opt-level = 3
 [dependencies]
 aery = "0.5.1"
 bevy = {version = "0.12", default-features = false}
+bimap = "0.6.3"
 
 [dev-dependencies]
 rstest = "0.18.2"

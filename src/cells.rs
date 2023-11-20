@@ -13,7 +13,7 @@ pub mod coords;
 // ===============
 
 #[derive(Component, Debug)]
-pub(crate) struct CellIndex(usize);
+pub struct CellIndex(usize);
 
 impl From<usize> for CellIndex {
     fn from(value: usize) -> Self {
@@ -55,7 +55,7 @@ pub struct InChunk<L>(std::marker::PhantomData<L>);
 // ================
 
 #[derive(Component, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ChunkCoord<const N: usize = 2>([isize; N]);
+pub struct ChunkCoord<const N: usize = 2>([isize; N]);
 
 impl<const N: usize> From<[isize; N]> for ChunkCoord<N> {
     fn from(value: [isize; N]) -> Self {
