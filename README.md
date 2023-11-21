@@ -56,3 +56,8 @@ fn move_character(
 ```
 
 More examples can be found in the [examples](/examples) folder!
+
+
+# Versions
+
+Releases will track bevy releases and versions just to keep everyone's life a little easier.

@@ -5,8 +5,11 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use super::{CellMap, CellMapLabel, Chunk, InMap};
-use aery::prelude::Set;
+use super::{
+    coords::{calculate_cell_index, calculate_chunk_coordinate},
+    CellCoord, CellIndex, CellMap, CellMapLabel, Chunk, InChunk, InMap,
+};
+use aery::{edges::Unset, prelude::Set};
 use bevy::{
     ecs::system::{Command, EntityCommands},
     log::info,
@@ -274,6 +277,188 @@ where
                     .unwrap(),
             )
         })
+}
+
+/// Inserts a cell into the world
+pub fn insert_cell<L, const N: usize>(world: &mut World, cell_c: [isize; N], cell_id: Entity)
+where
+    L: CellMapLabel + Send + 'static,
+{
+    // Take the map out and get the id to reinsert it
+    let (map_id, mut map) = spawn_or_remove_map::<L, N>(world);
+
+    // Take the chunk out and get the id to reinsert it
+    let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
+    let (chunk_id, mut chunk) = spawn_or_remove_chunk::<L, N>(world, &mut map, map_id, chunk_c);
+
+    // Insert the tile
+    let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+
+    if let Some(cell) = chunk.cells.get_mut(cell_i) {
+        if let Some(old_cell_id) = cell.replace(cell_id) {
+            world.despawn(old_cell_id);
+        }
+    }
+
+    Set::<InChunk<L>>::new(cell_id, chunk_id).apply(world);
+
+    world
+        .get_entity_mut(cell_id)
+        .unwrap()
+        .insert((CellIndex::from(cell_i), CellCoord::<N>::new(cell_c)));
+
+    world.get_entity_mut(chunk_id).unwrap().insert(chunk);
+    world.get_entity_mut(map_id).unwrap().insert(map);
+}
+
+/// Take a cell from the world.
+pub fn take_cell<L, const N: usize>(world: &mut World, cell_c: [isize; N]) -> Option<Entity>
+where
+    L: CellMapLabel + Send + 'static,
+{
+    // Get the map or return
+    let (map_id, mut map) = remove_map::<L, N>(world)?;
+
+    // Get the old chunk or return
+    let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
+    let (chunk_id, mut chunk) =
+        if let Some(chunk_info) = remove_chunk::<L, N>(world, &mut map, chunk_c) {
+            chunk_info
+        } else {
+            world.get_entity_mut(map_id).unwrap().insert(map);
+            return None;
+        };
+
+    // Remove the old entity or return if the old entity is already deleted
+    let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+
+    let cell = if let Some(mut cell_e) = chunk
+        .cells
+        .get_mut(cell_i)
+        .and_then(|cell| cell.take())
+        .and_then(|cell_id| world.get_entity_mut(cell_id))
+    {
+        cell_e.remove::<(CellIndex, CellCoord)>();
+        let cell_id = cell_e.id();
+        Unset::<InChunk<L>>::new(cell_id, chunk_id).apply(world);
+        Some(cell_id)
+    } else {
+        None
+    };
+
+    world.get_entity_mut(chunk_id).unwrap().insert(chunk);
+    world.get_entity_mut(map_id).unwrap().insert(map);
+    cell
+}
+
+/// Inserts a list of entities into the corresponding cells of a given cell map
+pub fn insert_cell_batch<L, const N: usize>(
+    world: &mut World,
+    cells: impl IntoIterator<Item = ([isize; N], Entity)>,
+) where
+    L: CellMapLabel + Send + 'static,
+{
+    info!("Chunking cells!");
+    let chunked_cells = cells
+        .into_iter()
+        .group_by(|(cell_c, _)| calculate_chunk_coordinate(*cell_c, L::CHUNK_SIZE));
+
+    info!("Removing maps!");
+    // Remove the map, or spawn an entity to hold the map, then create an empty map
+    let (map_id, mut map) = spawn_or_remove_map::<L, N>(world);
+
+    info!("Removing chunks!");
+    // Get the chunks and entities from the map
+    let cells_with_chunk = Vec::from_iter(chunked_cells.into_iter().map(|(chunk_c, cells)| {
+        let (chunk_id, chunk) = spawn_or_remove_chunk(world, &mut map, map_id, chunk_c);
+        (chunk_id, chunk, cells)
+    }));
+
+    info!("Inserting cells into chunks!");
+    for (chunk_id, mut chunk, cells) in cells_with_chunk {
+        for (cell_c, cell_id) in cells {
+            let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+
+            if let Some(cell) = chunk.cells.get_mut(cell_i) {
+                if let Some(old_cell_id) = cell.replace(cell_id) {
+                    world.despawn(old_cell_id);
+                }
+            }
+
+            Set::<InChunk<L>>::new(cell_id, chunk_id).apply(world);
+
+            world
+                .get_entity_mut(cell_id)
+                .unwrap()
+                .insert((CellIndex::from(cell_i), CellCoord::<N>::new(cell_c)));
+        }
+
+        info!("Inserting chunk");
+        world.get_entity_mut(chunk_id).unwrap().insert(chunk);
+    }
+
+    world.get_entity_mut(map_id).unwrap().insert(map);
+}
+
+/// Removes the cells from the cell map, returning the cell coordinates removed and their corresponding entities.
+pub fn take_cells<L, const N: usize>(
+    world: &mut World,
+    cells: impl IntoIterator<Item = [isize; N]>,
+) -> Vec<([isize; N], Entity)>
+where
+    L: CellMapLabel + Send + 'static,
+{
+    // Group cells by chunk
+    let chunked_cells = cells
+        .into_iter()
+        .group_by(|cell_c| calculate_chunk_coordinate(*cell_c, L::CHUNK_SIZE));
+
+    // Remove the map, or return if it doesn't exist
+    let (map_id, mut map) = if let Some(map_info) = remove_map::<L, N>(world) {
+        map_info
+    } else {
+        return Vec::new();
+    };
+
+    // Get the chunks and entities from the map
+    let cells_with_chunk = chunked_cells
+        .into_iter()
+        .filter_map(|(chunk_c, cells)| {
+            remove_chunk(world, &mut map, chunk_c)
+                .map(|chunk_info| (chunk_info.0, chunk_info.1, cells))
+        })
+        .map(|(chunk_id, chunk, cells)| {
+            (
+                chunk_id,
+                chunk,
+                cells.into_iter().collect::<Vec<[isize; N]>>(),
+            )
+        })
+        .collect::<Vec<(Entity, Chunk, Vec<[isize; N]>)>>();
+
+    let mut cell_ids = Vec::new();
+    for (chunk_id, mut chunk, cells) in cells_with_chunk {
+        for cell_c in cells {
+            let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+
+            if let Some(mut cell_e) = chunk
+                .cells
+                .get_mut(cell_i)
+                .and_then(|cell| cell.take())
+                .and_then(|cell_id| world.get_entity_mut(cell_id))
+            {
+                cell_e.remove::<(CellIndex, CellCoord)>();
+                let cell_id = cell_e.id();
+                Unset::<InChunk<L>>::new(cell_id, chunk_id).apply(world);
+                cell_ids.push((cell_c, cell_id));
+            }
+        }
+
+        world.get_entity_mut(chunk_id).unwrap().insert(chunk);
+    }
+
+    world.get_entity_mut(map_id).unwrap().insert(map);
+    cell_ids
 }
 
 trait GroupBy: Iterator {
