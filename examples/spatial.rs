@@ -1,4 +1,3 @@
-use aery::Aery;
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::Vec2Swizzles,
@@ -7,19 +6,13 @@ use bevy::{
     window::PrimaryWindow,
     DefaultPlugins,
 };
-use bevy_cells::{
-    cells::{
-        coords::{calculate_chunk_coordinate, world_to_cell, CoordIterator},
-        CellCoord,
-    },
-    prelude::*,
-};
+use bevy_cells::prelude::*;
 use std::ops::{Deref, DerefMut};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(Aery)
+        .add_plugins(CellsPlugin)
         .add_plugins(LogDiagnosticsPlugin::default())
         .add_plugins(FrameTimeDiagnosticsPlugin)
         .add_systems(Startup, spawn)

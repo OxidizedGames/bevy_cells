@@ -1,11 +1,10 @@
-use aery::Aery;
 use bevy::{prelude::*, sprite::SpriteBundle, DefaultPlugins};
-use bevy_cells::{cells::CellCoord, prelude::*};
+use bevy_cells::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(Aery)
+        .add_plugins(CellsPlugin)
         .add_systems(Startup, spawn)
         .add_systems(Update, move_character)
         .add_systems(PostUpdate, sync_cell_transforms)
