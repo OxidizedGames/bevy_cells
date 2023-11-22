@@ -23,7 +23,7 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    chunk_q: Query<'w, 's, Q, (F, Relations<InMap<L>>, With<Chunk>)>,
+    chunk_q: Query<'w, 's, Q, (F, Relations<InMap<L, N>>, With<Chunk>)>,
     map_q: Query<'w, 's, &'static CellMap<L, N>>,
 }
 
@@ -33,7 +33,7 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    type Target = Query<'w, 's, Q, (F, Relations<InMap<L>>, With<Chunk>)>;
+    type Target = Query<'w, 's, Q, (F, Relations<InMap<L, N>>, With<Chunk>)>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {

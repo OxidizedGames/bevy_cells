@@ -86,7 +86,7 @@ impl Chunk {
 
 #[derive(Relation)]
 #[aery(Recursive)]
-pub struct InMap<L>(std::marker::PhantomData<L>);
+pub struct InMap<L, const N: usize>(std::marker::PhantomData<L>);
 
 // ==============
 // Map Components

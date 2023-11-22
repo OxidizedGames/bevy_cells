@@ -7,9 +7,12 @@ use std::{
 
 use super::{
     coords::{calculate_cell_index, calculate_chunk_coordinate},
-    CellCoord, CellIndex, CellMap, CellMapLabel, Chunk, InChunk, InMap,
+    CellCoord, CellIndex, CellMap, CellMapLabel, Chunk, ChunkCoord, InChunk, InMap,
 };
-use aery::{edges::Unset, prelude::Set};
+use aery::{
+    edges::{CheckedDespawn, Unset},
+    prelude::Set,
+};
 use bevy::{
     ecs::system::{Command, EntityCommands},
     log::info,
@@ -220,7 +223,7 @@ where
         info!("Chunk spawned!");
         let chunk_id = world.spawn_empty().id();
         map.chunks.insert(chunk_c.into(), chunk_id);
-        Set::<InMap<L>>::new(chunk_id, map_id).apply(world);
+        Set::<InMap<L, N>>::new(chunk_id, map_id).apply(world);
         (chunk_id, Chunk::new(L::CHUNK_SIZE.pow(N as u32)))
     }
 }
@@ -459,6 +462,55 @@ where
 
     world.get_entity_mut(map_id).unwrap().insert(map);
     cell_ids
+}
+
+/// Insert the given entity into the map and have it treated as a chunk
+pub fn insert_chunk<L, const N: usize>(world: &mut World, chunk_c: [isize; N], chunk_id: Entity)
+where
+    L: CellMapLabel + Send + 'static,
+{
+    let (map_id, mut map) = spawn_or_remove_map::<L, N>(world);
+
+    // Despawn the chunk if it exists
+    if let Some(chunk_id) = map.chunks.insert(chunk_c.into(), chunk_id) {
+        CheckedDespawn(chunk_id).apply(world);
+    }
+
+    world
+        .get_entity_mut(chunk_id)
+        .unwrap()
+        .insert(Chunk::new(L::CHUNK_SIZE.pow(N as u32)));
+    Set::<InMap<L, N>>::new(chunk_id, map_id).apply(world);
+
+    map.chunks.insert(chunk_c.into(), chunk_id);
+    world.entity_mut(map_id).insert(map);
+}
+
+/// Remove the chunk from the map without despawning it.
+pub fn take_chunk<L, const N: usize>(world: &mut World, chunk_c: [isize; N]) -> Option<Entity>
+where
+    L: CellMapLabel + Send + 'static,
+{
+    // Get the map or return
+    let (map_id, mut map) = remove_map::<L, N>(world)?;
+
+    // Get the old chunk or return
+    let chunk_id = if let Some(mut chunk_e) = map
+        .chunks
+        .remove(&chunk_c.into())
+        .and_then(|chunk_id| world.get_entity_mut(chunk_id))
+    {
+        chunk_e.remove::<(Chunk, ChunkCoord)>();
+        let chunk_id = chunk_e.id();
+        Unset::<InMap<L, N>>::new(chunk_id, map_id).apply(world);
+        Some(chunk_id)
+    } else {
+        None
+    };
+
+    world.entity_mut(map_id).insert(map);
+
+    chunk_id
 }
 
 trait GroupBy: Iterator {

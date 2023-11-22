@@ -23,7 +23,7 @@ where
     F: ReadOnlyWorldQuery + 'static,
 {
     cell_q: Query<'w, 's, Q, (F, Relations<InChunk<L>>)>,
-    chunk_q: Query<'w, 's, &'static Chunk, Relations<InMap<L>>>,
+    chunk_q: Query<'w, 's, &'static Chunk, Relations<InMap<L, N>>>,
     map_q: Query<'w, 's, &'static CellMap<L, N>>,
 }
 
