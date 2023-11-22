@@ -7,7 +7,7 @@ use bimap::BiMap;
 
 use crate::prelude::{commands::insert_cell_batch, CellMapLabel};
 
-use super::take_cells;
+use super::take_cell_batch;
 
 pub struct SpawnCellBatch<L, F, B, IC, const N: usize = 2>
 where
@@ -62,7 +62,7 @@ where
     IC: IntoIterator<Item = [isize; N]> + Send + 'static,
 {
     fn apply(self, world: &mut World) {
-        for (_, cell_id) in take_cells::<L, N>(world, self.cell_cs) {
+        for (_, cell_id) in take_cell_batch::<L, N>(world, self.cell_cs) {
             world.despawn(cell_id);
         }
     }
@@ -92,7 +92,7 @@ where
             .collect::<HashMap<[isize; N], [isize; N]>>();
 
         let removed =
-            take_cells::<L, N>(world, cell_cs.keys().cloned().collect::<Vec<[isize; N]>>())
+            take_cell_batch::<L, N>(world, cell_cs.keys().cloned().collect::<Vec<[isize; N]>>())
                 .into_iter()
                 .map(|(cell_c, cell_id)| (cell_cs.remove(&cell_c).expect(ERR_MESSAGE), cell_id));
 
@@ -123,14 +123,14 @@ where
             .into_iter()
             .collect::<BiMap<[isize; N], [isize; N]>>();
 
-        let removed_left = take_cells::<L, N>(
+        let removed_left = take_cell_batch::<L, N>(
             world,
             cell_cs.left_values().cloned().collect::<Vec<[isize; N]>>(),
         )
         .into_iter()
         .map(|(cell_c, cell_id)| (*cell_cs.get_by_left(&cell_c).expect(ERR_MESSAGE), cell_id));
 
-        let removed_right = take_cells::<L, N>(
+        let removed_right = take_cell_batch::<L, N>(
             world,
             cell_cs.right_values().cloned().collect::<Vec<[isize; N]>>(),
         )

@@ -48,7 +48,7 @@ impl<const N: usize> Deref for CellCoord<N> {
 
 #[derive(Relation)]
 #[aery(Recursive)]
-pub struct InChunk<L>(std::marker::PhantomData<L>);
+pub struct InChunk<L, const N: usize>(std::marker::PhantomData<L>);
 
 // ================
 // Chunk Components
