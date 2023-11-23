@@ -15,7 +15,6 @@ use aery::{
 };
 use bevy::{
     ecs::system::{Command, EntityCommands},
-    log::info,
     prelude::{Bundle, Commands, Entity, With, World},
     utils::{hashbrown::hash_map::Entry, HashMap},
 };
@@ -98,7 +97,7 @@ where
 
     /// Spawns cells from the given iterator using the given function.
     /// This will despawn any cell that already exists in this coordinate
-    pub fn spawn_cell_batch_with<F, B, IC>(&mut self, cell_cs: IC, bundle_f: F)
+    pub fn spawn_cell_batch<F, B, IC>(&mut self, cell_cs: IC, bundle_f: F)
     where
         F: Fn([isize; N]) -> B + Send + 'static,
         B: Bundle + Send + 'static,
@@ -243,11 +242,9 @@ where
     L: CellMapLabel + Send + 'static,
 {
     if let Some(chunk_info) = remove_chunk::<L, N>(world, map, chunk_c) {
-        info!("Chunk found!");
         chunk_info
     } else {
-        info!("Chunk spawned!");
-        let chunk_id = world.spawn_empty().id();
+        let chunk_id = world.spawn(ChunkCoord::from(chunk_c)).id();
         map.chunks.insert(chunk_c.into(), chunk_id);
         Set::<InMap<L, N>>::new(chunk_id, map_id).apply(world);
         (chunk_id, Chunk::new(L::CHUNK_SIZE.pow(N as u32)))
@@ -264,7 +261,6 @@ fn remove_chunk<L, const N: usize>(
 where
     L: CellMapLabel + Send + 'static,
 {
-    info!("Removing Chunk: {:?}!", chunk_c);
     map.chunks
         .get(&chunk_c.into())
         .cloned()
@@ -396,7 +392,7 @@ pub fn insert_cell_batch<L, const N: usize>(
 
     // Get the chunks and entities from the map
     let cells_with_chunk = Vec::from_iter(chunked_cells.into_iter().map(|(chunk_c, cells)| {
-        let (chunk_id, chunk) = spawn_or_remove_chunk(world, &mut map, map_id, chunk_c);
+        let (chunk_id, chunk) = spawn_or_remove_chunk::<L, N>(world, &mut map, map_id, chunk_c);
         (chunk_id, chunk, cells)
     }));
 
@@ -418,7 +414,6 @@ pub fn insert_cell_batch<L, const N: usize>(
                 .insert((CellIndex::from(cell_i), CellCoord::<N>::new(cell_c)));
         }
 
-        info!("Inserting chunk");
         world.get_entity_mut(chunk_id).unwrap().insert(chunk);
     }
 

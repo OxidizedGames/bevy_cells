@@ -64,7 +64,7 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..Default::default()
     };
 
-    cell_commands.spawn_cell_batch_with(CoordIterator::new([-250, -250], [250, 250]), move |_| {
+    cell_commands.spawn_cell_batch(CoordIterator::new([-250, -250], [250, 250]), move |_| {
         (Block, sprite_bundle.clone())
     })
 }

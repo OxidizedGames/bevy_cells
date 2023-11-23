@@ -60,15 +60,13 @@ fn spawn(
     let mut cell_commands = commands.cells::<GameLayer, 3>();
 
     // spawn a 10 * 10 room
-    for x in -5..=5 {
-        cell_commands.spawn_cell([x, 0, 5], (Block, block_mesh.clone()));
-        cell_commands.spawn_cell([x, 0, -5], (Block, block_mesh.clone()));
-    }
-
-    for z in -4..=4 {
-        cell_commands.spawn_cell([5, 0, z], (Block, block_mesh.clone()));
-        cell_commands.spawn_cell([-5, 0, z], (Block, block_mesh.clone()));
-    }
+    cell_commands.spawn_cell_batch(
+        CoordIterator::new([-5, 0, 5], [5, 0, 5])
+            .chain(CoordIterator::new([-5, 0, -5], [5, 0, -5]))
+            .chain(CoordIterator::new([5, 0, -4], [5, 0, 4]))
+            .chain(CoordIterator::new([-5, 0, -4], [-5, 0, 4])),
+        move |_| (Block, block_mesh.clone()),
+    );
 
     // spawn a player
     cell_commands.spawn_cell(
@@ -157,7 +155,8 @@ fn move_character(
 }
 
 fn sync_cell_transforms(
-    mut cells: CellQuery<GameLayer, (&CellCoord<3>, &mut Transform), Changed<CellCoord<3>>>,
+    // Important, you have to put the 3 in all these places at the moment!!!
+    mut cells: CellQuery<GameLayer, (&CellCoord<3>, &mut Transform), Changed<CellCoord<3>>, 3>,
 ) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32;

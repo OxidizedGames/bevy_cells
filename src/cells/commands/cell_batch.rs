@@ -1,6 +1,5 @@
 use bevy::{
     ecs::{bundle::Bundle, entity::Entity, system::Command, world::World},
-    log::info,
     utils::HashMap,
 };
 use bimap::BiMap;
@@ -29,20 +28,17 @@ where
     IC: IntoIterator<Item = [isize; N]> + Send + 'static,
 {
     fn apply(self, world: &mut World) {
-        info!("Expanding cells!");
         let (cell_cs, bundles): (Vec<[isize; N]>, Vec<B>) = self
             .cell_cs
             .into_iter()
             .map(|coord| (coord, (self.bundle_f)(coord)))
             .unzip();
 
-        info!("Spawning cells!");
         let cells = cell_cs
             .into_iter()
             .zip(world.spawn_batch(bundles))
             .collect::<Vec<([isize; N], Entity)>>();
 
-        info!("Inserting cells!");
         insert_cell_batch::<L, N>(world, cells);
     }
 }

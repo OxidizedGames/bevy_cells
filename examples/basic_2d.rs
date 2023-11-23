@@ -36,15 +36,13 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
 
     // spawn a 10 * 10 room
-    for x in -5..=5 {
-        cell_commands.spawn_cell([x, 5], (Block, sprite_bundle.clone()));
-        cell_commands.spawn_cell([x, -5], (Block, sprite_bundle.clone()));
-    }
-
-    for y in -4..=4 {
-        cell_commands.spawn_cell([5, y], (Block, sprite_bundle.clone()));
-        cell_commands.spawn_cell([-5, y], (Block, sprite_bundle.clone()));
-    }
+    cell_commands.spawn_cell_batch(
+        CoordIterator::new([-5, 5], [5, 5])
+            .chain(CoordIterator::new([-5, -5], [5, -5]))
+            .chain(CoordIterator::new([5, -4], [5, 4]))
+            .chain(CoordIterator::new([-5, -4], [-5, 4])),
+        move |_| (Block, sprite_bundle.clone()),
+    );
 
     // spawn a player
     cell_commands.spawn_cell(
