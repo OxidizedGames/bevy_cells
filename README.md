@@ -65,7 +65,7 @@ More examples can be found in the [examples](/examples) folder!
 
 # Versions
 
-| Bevy version | Aery verison |
-|--------------|--------------|
-| 0.12         | 0.1          |
-| 0.11         | 0.1-dev      |
+| Bevy version | bevy_cells verison |
+|--------------|--------------------|
+| 0.12         | 0.1                |
+| 0.11         | 0.1-dev            |
