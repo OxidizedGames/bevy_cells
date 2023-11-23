@@ -1,21 +1,29 @@
+#[inline]
 pub fn calculate_chunk_coordinate<const N: usize>(
-    cell_c: [isize; N],
-    chunk_size: usize,
-) -> [isize; N] {
-    cell_c.map(|c| c / (chunk_size as isize) - if c < 0 { 1 } else { 0 })
-}
-
-pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
     mut cell_c: [isize; N],
     chunk_size: usize,
 ) -> [isize; N] {
-    let chunk_c = calculate_chunk_coordinate(cell_c, chunk_size);
-    for i in 0..N {
-        cell_c[i] -= chunk_c[i] * chunk_size as isize;
+    for i in cell_c.iter_mut() {
+        *i = *i / (chunk_size as isize) - if *i < 0 { 1 } else { 0 }
     }
     cell_c
 }
 
+#[inline]
+pub fn calculate_chunk_relative_cell_coordinate<const N: usize>(
+    mut cell_c: [isize; N],
+    chunk_size: usize,
+) -> [isize; N] {
+    for i in cell_c.iter_mut() {
+        *i %= chunk_size as isize;
+        if *i < 0 {
+            *i += chunk_size as isize;
+        }
+    }
+    cell_c
+}
+
+#[inline]
 pub fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usize) -> usize {
     let mut index = 0;
     let relative_cell_c = calculate_chunk_relative_cell_coordinate(cell_c, chunk_size);
@@ -25,6 +33,7 @@ pub fn calculate_cell_index<const N: usize>(cell_c: [isize; N], chunk_size: usiz
     index
 }
 
+#[inline]
 pub fn calculate_cell_coordinate<const N: usize>(
     chunk_c: [isize; N],
     cell_i: usize,
@@ -41,6 +50,7 @@ pub fn calculate_cell_coordinate<const N: usize>(
     chunk_world_c
 }
 
+#[inline]
 pub fn max_cell_index<const N: usize>(chunk_size: usize) -> usize {
     let mut index = 0;
     for i in 1..=N {
@@ -53,6 +63,7 @@ pub fn max_cell_index<const N: usize>(chunk_size: usize) -> usize {
 /// and the scale_f of the cell coordinates to world coordinates.
 /// (For example, if cells are being represented by 16x16 pixel sprites,
 /// the scale factor should be set to 16)
+#[inline]
 pub fn world_to_cell<const N: usize>(world_c: [f32; N], scale_f: f32) -> [isize; N] {
     world_c.map(|c| (c / scale_f - if c < 0.0 { 1.0 } else { 0.0 }) as isize)
 }
@@ -84,6 +95,7 @@ impl<const N: usize> CoordIterator<N> {
 impl<const N: usize> Iterator for CoordIterator<N> {
     type Item = [isize; N];
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.complete {
             return None;
@@ -113,7 +125,7 @@ mod tests {
     use rstest::rstest;
     use std::ops::RangeInclusive;
 
-    use super::CoordIterator;
+    use super::*;
 
     fn make_range_iter(val_1: isize, val_2: isize) -> RangeInclusive<isize> {
         if val_1 < val_2 {
@@ -146,5 +158,19 @@ mod tests {
         let next = iter.next();
         println!("Fin: {:?}", next);
         assert_eq!(None, next);
+    }
+
+    #[rstest]
+    #[case(16, [15, 0], 15)]
+    #[case(16, [0, 15], 240)]
+    #[case(16, [15, 15], 255)]
+    #[case(16, [-1, -1], 255)]
+    #[case(16, [-16, -16], 0)]
+    fn cell_index_test(
+        #[case] chunk_size: usize,
+        #[case] cell_c: [isize; 2],
+        #[case] index: usize,
+    ) {
+        assert_eq!(calculate_cell_index(cell_c, chunk_size), index)
     }
 }

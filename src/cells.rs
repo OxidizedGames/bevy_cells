@@ -13,7 +13,7 @@ pub mod coords;
 // ===============
 
 #[derive(Component, Debug)]
-pub(crate) struct CellIndex(usize);
+pub struct CellIndex(usize);
 
 impl From<usize> for CellIndex {
     fn from(value: usize) -> Self {
@@ -30,10 +30,10 @@ impl Deref for CellIndex {
 }
 
 #[derive(Component, Debug)]
-pub(crate) struct CellCoord<const N: usize = 2>([isize; N]);
+pub struct CellCoord<const N: usize = 2>([isize; N]);
 
-impl<const N: usize> From<[isize; N]> for CellCoord<N> {
-    fn from(value: [isize; N]) -> Self {
+impl<const N: usize> CellCoord<N> {
+    pub(crate) fn new(value: [isize; N]) -> Self {
         Self(value)
     }
 }
@@ -48,14 +48,14 @@ impl<const N: usize> Deref for CellCoord<N> {
 
 #[derive(Relation)]
 #[aery(Recursive)]
-pub struct InChunk<L>(std::marker::PhantomData<L>);
+pub struct InChunk<L, const N: usize>(std::marker::PhantomData<L>);
 
 // ================
 // Chunk Components
 // ================
 
 #[derive(Component, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct ChunkCoord<const N: usize = 2>([isize; N]);
+pub struct ChunkCoord<const N: usize = 2>([isize; N]);
 
 impl<const N: usize> From<[isize; N]> for ChunkCoord<N> {
     fn from(value: [isize; N]) -> Self {
@@ -86,7 +86,7 @@ impl Chunk {
 
 #[derive(Relation)]
 #[aery(Recursive)]
-pub struct InMap<L>(std::marker::PhantomData<L>);
+pub struct InMap<L, const N: usize>(std::marker::PhantomData<L>);
 
 // ==============
 // Map Components

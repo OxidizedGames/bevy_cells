@@ -1,11 +1,10 @@
-use aery::Aery;
 use bevy::{prelude::*, sprite::SpriteBundle, DefaultPlugins};
 use bevy_cells::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(Aery)
+        .add_plugins(CellsPlugin)
         .add_systems(Startup, spawn)
         .add_systems(Update, move_character)
         .add_systems(PostUpdate, sync_cell_transforms)
@@ -37,15 +36,13 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
 
     // spawn a 10 * 10 room
-    for x in -5..=5 {
-        cell_commands.spawn_cell([x, 5], (Block, sprite_bundle.clone()));
-        cell_commands.spawn_cell([x, -5], (Block, sprite_bundle.clone()));
-    }
-
-    for y in -4..=4 {
-        cell_commands.spawn_cell([5, y], (Block, sprite_bundle.clone()));
-        cell_commands.spawn_cell([-5, y], (Block, sprite_bundle.clone()));
-    }
+    cell_commands.spawn_cell_batch(
+        CoordIterator::new([-5, 5], [5, 5])
+            .chain(CoordIterator::new([-5, -5], [5, -5]))
+            .chain(CoordIterator::new([5, -4], [5, 4]))
+            .chain(CoordIterator::new([-5, -4], [-5, 4])),
+        move |_| (Block, sprite_bundle.clone()),
+    );
 
     // spawn a player
     cell_commands.spawn_cell(
@@ -63,7 +60,7 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    character: CellQuery<GameLayer, CellCoord, With<Character>>,
+    character: CellQuery<GameLayer, &CellCoord, With<Character>>,
     walls: CellQuery<GameLayer, (), With<Block>>,
 ) {
     let mut cell_commands = commands.cells::<GameLayer, 2>();
@@ -95,11 +92,13 @@ fn move_character(
     let new_coord = [char_c[0] + x, char_c[1] + y];
 
     if walls.get_at(new_coord).is_none() {
-        cell_commands.move_cell(*char_c, new_coord);
+        cell_commands.move_cell(**char_c, new_coord);
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord, &mut Transform)>) {
+fn sync_cell_transforms(
+    mut cells: CellQuery<GameLayer, (&CellCoord, &mut Transform), Changed<CellCoord>>,
+) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32 * 16.0;
         transform.translation.y = cell_c[1] as f32 * 16.0;

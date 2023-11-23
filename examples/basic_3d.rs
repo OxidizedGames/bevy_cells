@@ -1,13 +1,12 @@
 use std::f32::consts::PI;
 
-use aery::Aery;
 use bevy::{pbr::CascadeShadowConfigBuilder, prelude::*, DefaultPlugins};
 use bevy_cells::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(Aery)
+        .add_plugins(CellsPlugin)
         .add_systems(Startup, spawn)
         .add_systems(Update, move_character)
         .add_systems(PostUpdate, sync_cell_transforms)
@@ -61,15 +60,13 @@ fn spawn(
     let mut cell_commands = commands.cells::<GameLayer, 3>();
 
     // spawn a 10 * 10 room
-    for x in -5..=5 {
-        cell_commands.spawn_cell([x, 0, 5], (Block, block_mesh.clone()));
-        cell_commands.spawn_cell([x, 0, -5], (Block, block_mesh.clone()));
-    }
-
-    for z in -4..=4 {
-        cell_commands.spawn_cell([5, 0, z], (Block, block_mesh.clone()));
-        cell_commands.spawn_cell([-5, 0, z], (Block, block_mesh.clone()));
-    }
+    cell_commands.spawn_cell_batch(
+        CoordIterator::new([-5, 0, 5], [5, 0, 5])
+            .chain(CoordIterator::new([-5, 0, -5], [5, 0, -5]))
+            .chain(CoordIterator::new([5, 0, -4], [5, 0, 4]))
+            .chain(CoordIterator::new([-5, 0, -4], [-5, 0, 4])),
+        move |_| (Block, block_mesh.clone()),
+    );
 
     // spawn a player
     cell_commands.spawn_cell(
@@ -111,7 +108,7 @@ fn spawn(
 fn move_character(
     keyboard_input: Res<Input<KeyCode>>,
     mut commands: Commands,
-    character: CellQuery<GameLayer, CellCoord<3>, With<Character>, 3>,
+    character: CellQuery<GameLayer, &CellCoord<3>, With<Character>, 3>,
     walls: CellQuery<GameLayer, (), With<Block>, 3>,
 ) {
     let mut cell_commands = commands.cells::<GameLayer, 3>();
@@ -153,11 +150,14 @@ fn move_character(
     let new_coord = [char_c[0] + x, char_c[1] + y, char_c[2] + z];
 
     if walls.get_at(new_coord).is_none() {
-        cell_commands.move_cell(*char_c, new_coord);
+        cell_commands.move_cell(**char_c, new_coord);
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord<3>, &mut Transform)>) {
+fn sync_cell_transforms(
+    // Important, you have to put the 3 in all these places at the moment!!!
+    mut cells: CellQuery<GameLayer, (&CellCoord<3>, &mut Transform), Changed<CellCoord<3>>, 3>,
+) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32;
         transform.translation.y = cell_c[1] as f32;

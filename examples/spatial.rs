@@ -1,4 +1,3 @@
-use aery::Aery;
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::Vec2Swizzles,
@@ -7,21 +6,18 @@ use bevy::{
     window::PrimaryWindow,
     DefaultPlugins,
 };
-use bevy_cells::{
-    cells::coords::{calculate_chunk_coordinate, world_to_cell},
-    prelude::*,
-};
+use bevy_cells::prelude::*;
 use std::ops::{Deref, DerefMut};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugins(Aery)
+        .add_plugins(CellsPlugin)
+        .add_plugins(LogDiagnosticsPlugin::default())
+        .add_plugins(FrameTimeDiagnosticsPlugin)
         .add_systems(Startup, spawn)
         .add_systems(Update, (add_damage, check_damage).chain())
         .add_systems(PostUpdate, sync_cell_transforms)
-        .add_plugins(LogDiagnosticsPlugin::default())
-        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .run();
 }
 
@@ -68,13 +64,9 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..Default::default()
     };
 
-    // spawn a 10 * 10 group
-    for x in -500..=500 {
-        for y in -500..=500 {
-            cell_commands.spawn_cell([x, y], (Block, sprite_bundle.clone()));
-            cell_commands.spawn_cell([x, -y], (Block, sprite_bundle.clone()));
-        }
-    }
+    cell_commands.spawn_cell_batch(CoordIterator::new([-250, -250], [250, 250]), move |_| {
+        (Block, sprite_bundle.clone())
+    })
 }
 
 fn add_damage(
@@ -137,7 +129,9 @@ fn check_damage(
     }
 }
 
-fn sync_cell_transforms(mut cells: CellQuery<GameLayer, (CellCoord, &mut Transform)>) {
+fn sync_cell_transforms(
+    mut cells: CellQuery<GameLayer, (&CellCoord, &mut Transform), Changed<CellCoord>>,
+) {
     for (cell_c, mut transform) in cells.iter_mut() {
         transform.translation.x = cell_c[0] as f32 * 16.0;
         transform.translation.y = cell_c[1] as f32 * 16.0;

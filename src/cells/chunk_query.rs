@@ -23,7 +23,7 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    chunk_q: Query<'w, 's, Q, (F, Relations<InMap<L>>, With<Chunk>)>,
+    chunk_q: Query<'w, 's, Q, (F, Relations<InMap<L, N>>, With<Chunk>)>,
     map_q: Query<'w, 's, &'static CellMap<L, N>>,
 }
 
@@ -33,8 +33,9 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    type Target = Query<'w, 's, Q, (F, Relations<InMap<L>>, With<Chunk>)>;
+    type Target = Query<'w, 's, Q, (F, Relations<InMap<L, N>>, With<Chunk>)>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.chunk_q
     }
@@ -46,6 +47,7 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.chunk_q
     }
@@ -60,6 +62,7 @@ where
     /// Get's the readonly query item for the given cell.
     /// # Note
     /// Coordinates are for these calls are in chunk coordinates.
+    #[inline]
     pub fn get_at(
         &self,
         cell_c: [isize; N],
@@ -74,6 +77,7 @@ where
     /// Get's the query item for the given cell.
     /// # Note
     /// Coordinates are for these calls are in chunk coordinates.
+    #[inline]
     pub fn get_at_mut(&mut self, cell_c: [isize; N]) -> Option<<Q as WorldQuery>::Item<'_>> {
         let map = self.map_q.get_single().ok()?;
         let chunk_c = calculate_chunk_coordinate(cell_c, L::CHUNK_SIZE);
@@ -87,6 +91,7 @@ where
     /// This function makes it possible to violate Rust's aliasing guarantees: please use responsibly.
     /// # Note
     /// Coordinates are for these calls are in chunk coordinates.
+    #[inline]
     pub unsafe fn get_at_unchecked(
         &self,
         cell_c: [isize; N],
@@ -102,6 +107,7 @@ where
     /// inclusive over `corner_2`
     /// # Note
     /// Coordinates are for these calls are in chunk coordinates.
+    #[inline]
     pub fn iter_in(
         &self,
         corner_1: [isize; N],
@@ -114,6 +120,7 @@ where
     /// inclusive over `corner_2`.
     /// # Note
     /// Coordinates are for these calls are in chunk coordinates.
+    #[inline]
     pub fn iter_in_mut(
         &mut self,
         corner_1: [isize; N],
@@ -122,6 +129,7 @@ where
         unsafe { ChunkQueryIterMut::new(self, corner_1, corner_2) }
     }
 
+    #[inline]
     pub fn to_readonly(
         &self,
     ) -> ChunkQuery<'_, 's, L, <Q as WorldQuery>::ReadOnly, <F as WorldQuery>::ReadOnly, N> {
@@ -173,6 +181,7 @@ where
     type Item = <<Q as WorldQuery>::ReadOnly as WorldQuery>::Item<'w>;
 
     #[allow(clippy::while_let_on_iterator)]
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(target) = self.coord_iter.next() {
             // This fixes some lifetime issue that I'm not sure I understand quite yet, will do testing
@@ -236,6 +245,7 @@ where
     type Item = <Q as WorldQuery>::Item<'w>;
 
     #[allow(clippy::while_let_on_iterator)]
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(target) = self.coord_iter.next() {
             // This fixes some lifetime issue that I'm not sure I understand quite yet, will do testing

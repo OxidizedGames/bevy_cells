@@ -22,8 +22,8 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    cell_q: Query<'w, 's, Q, (F, Relations<InChunk<L>>)>,
-    chunk_q: Query<'w, 's, &'static Chunk, Relations<InMap<L>>>,
+    cell_q: Query<'w, 's, Q, (F, Relations<InChunk<L, N>>)>,
+    chunk_q: Query<'w, 's, &'static Chunk, Relations<InMap<L, N>>>,
     map_q: Query<'w, 's, &'static CellMap<L, N>>,
 }
 
@@ -33,7 +33,7 @@ where
     Q: WorldQuery + 'static,
     F: ReadOnlyWorldQuery + 'static,
 {
-    type Target = Query<'w, 's, Q, (F, Relations<InChunk<L>>)>;
+    type Target = Query<'w, 's, Q, (F, Relations<InChunk<L, N>>)>;
 
     fn deref(&self) -> &Self::Target {
         &self.cell_q
@@ -80,8 +80,8 @@ where
         let chunk_e = map.chunks.get(&chunk_c.into())?;
 
         let chunk = self.chunk_q.get(*chunk_e).ok()?;
-        let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
-        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
+        let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+        let cell_e = chunk.cells.get(cell_i)?.as_ref()?;
 
         self.cell_q.get_mut(*cell_e).ok()
     }
@@ -98,8 +98,8 @@ where
         let chunk_e = map.chunks.get(&chunk_c.into())?;
 
         let chunk = self.chunk_q.get(*chunk_e).ok()?;
-        let cell_index = calculate_cell_index(cell_c, L::CHUNK_SIZE);
-        let cell_e = chunk.cells.get(cell_index)?.as_ref()?;
+        let cell_i = calculate_cell_index(cell_c, L::CHUNK_SIZE);
+        let cell_e = chunk.cells.get(cell_i)?.as_ref()?;
 
         self.cell_q.get_unchecked(*cell_e).ok()
     }
