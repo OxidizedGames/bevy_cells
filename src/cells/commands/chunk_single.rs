@@ -3,7 +3,7 @@ use bevy::ecs::{entity::Entity, system::Command, world::World};
 
 use crate::prelude::CellMapLabel;
 
-use super::{insert_chunk, take_chunk};
+use super::{insert_chunk, take_chunk, take_chunk_despawn_cells};
 
 pub struct SpawnChunk<L, const N: usize = 2> {
     pub chunk_c: [isize; N],
@@ -30,7 +30,7 @@ where
     L: CellMapLabel + Send + 'static,
 {
     fn apply(self, world: &mut World) {
-        let cell_id = take_chunk::<L, N>(world, self.chunk_c);
+        let cell_id = take_chunk_despawn_cells::<L, N>(world, self.chunk_c);
         if let Some(id) = cell_id {
             CheckedDespawn(id).apply(world);
         }
